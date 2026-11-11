@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { useApp, useRows } from "@/app/store";
+import { toast } from "sonner";
+import { errorText, useApp, useRows } from "@/app/store";
 import { ConfirmDialog, DataTable, FormDialog, PageHeader, Pill, Section, SeverityPill } from "@/app/ui";
 import { date, dateTime, money } from "@/app/format";
 import type { ImportResult } from "@/data/client";
@@ -21,6 +22,16 @@ export default function Admin() {
   const runs = useRows("import_runs", { order: [["started_at", "desc"]], limit: 1 }).rows;
   const issues = useRows("import_issues", runs[0] ? { eq: { run_id: runs[0].id } } : {}).rows;
   const [dlg, setDlg] = useState<{ kind: string; row?: any } | null>(null);
+  const [settingPreview, setSettingPreview] = useState<null | { key: string; value: string; rows: any[] }>(null);
+  const METRIC: Record<string, string> = { margin_not_final: "Margin on orders without final costs", orders_overdue: "Orders overdue", overdue_amount: "Overdue amount",
+    reminders_due: "EXW payment reminders", orders_paid: "Orders counted as paid" };
+  const submitSetting = async (v: any) => {
+    const key = dlg!.row.key; let rows: any[] = [];
+    try { rows = await db.rpc<any[]>("preview_setting_change", { p_key: key, p_value: String(v.value).trim() }); }
+    catch (e) { toast.error(errorText(e), { duration: 9000 }); return false; }
+    if (!rows.length) return save(() => db.update("app_settings", { key }, { value: String(v.value).trim() }), "Setting saved");
+    setSettingPreview({ key, value: String(v.value).trim(), rows });
+  };
   const [imp, setImp] = useState<{ result: ImportResult; saved: boolean; name: string; data: Uint8Array } | null>(null); const [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const doImport = async (data: Uint8Array, name: string, commit: boolean) => {
@@ -93,8 +104,13 @@ export default function Admin() {
       </TabsContent>
     </Tabs>
 
-    <FormDialog open={dlg?.kind === "setting"} onClose={() => setDlg(null)} title={dlg?.row?.description ?? "Setting"} description="Changing a setting changes every calculation that uses it, from now on."
-      initial={dlg?.row} fields={[{ name: "value", label: "Value", required: true }]} onSubmit={v => save(() => db.update("app_settings", { key: dlg!.row.key }, v), "Setting saved")} />
+    <FormDialog open={dlg?.kind === "setting"} onClose={() => setDlg(null)} title={dlg?.row?.description ?? "Setting"} description={`Current value: ${dlg?.row?.value ?? ""}. A change applies from now on to every calculation that uses it. Costs that are already final do not change. You see the effect before it is saved.`}
+      initial={dlg?.row} fields={[{ name: "value", label: "New value", required: true, hint: dlg?.row ? ({ cost_decimals: "Whole number, 0 to 6", payment_tolerance: "Amount, 0 to 1", exw_reminder_working_days: "Whole number of working days, 0 to 60", fob_balance_days_before_eta: "Whole number of days, 0 to 365", reporting_currency: "EUR or USD" } as any)[dlg.row.key] : undefined }]} onSubmit={submitSetting} />
+    <ConfirmDialog open={!!settingPreview} onClose={() => setSettingPreview(null)} title="This setting changes existing figures" confirmLabel="Save the setting"
+      body={settingPreview && <div className="space-y-2"><p>Changing <b>{settingPreview.key}</b> to <b>{settingPreview.value}</b> gives:</p>
+        <table className="w-full text-sm"><thead><tr className="border-b text-left text-xs"><th className="py-1">Figure</th><th>Cur</th><th className="text-right">Now</th><th className="text-right">After</th></tr></thead>
+          <tbody>{settingPreview.rows.map((r, i) => <tr key={i} className="border-b last:border-0"><td className="py-1">{METRIC[r.metric] ?? r.metric}</td><td>{r.currency}</td><td className="text-right">{Number(r.value_before)}</td><td className="text-right font-semibold">{Number(r.value_after)}</td></tr>)}</tbody></table></div>}
+      onConfirm={() => settingPreview && save(() => db.update("app_settings", { key: settingPreview.key }, { value: settingPreview.value }), "Setting saved")} />
     <FormDialog open={dlg?.kind === "rate"} onClose={() => setDlg(null)} title="Add exchange rate" initial={{ currency: "USD", source: "ECB reference rate" }}
       fields={[{ name: "rate_date", label: "From date", type: "date", required: true, span: 1 }, { name: "currency", label: "Currency", required: true, span: 1 },
         { name: "rate", label: "Value of 1 unit in EUR", type: "number", required: true, hint: "Example: 0.92 means 1 USD = 0.92 EUR" }, { name: "source", label: "Source" }]}

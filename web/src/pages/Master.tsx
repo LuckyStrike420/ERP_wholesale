@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useApp, useRows } from "@/app/store";
-import { DataTable, FormDialog, PageHeader, Pill, Section, type Field } from "@/app/ui";
+import { toast } from "sonner";
+import { errorText, useApp, useRows } from "@/app/store";
+import { ConfirmDialog, DataTable, FormDialog, PageHeader, Pill, Section, type Field } from "@/app/ui";
 import { date, money, pct, qty, today } from "@/app/format";
 
 const TYPES = ["EXW", "FOB"] as const;
@@ -82,7 +83,9 @@ export function Products() {
   const products = useRows("products", { order: [["name", "asc"]] }).rows; const rules = useRows("product_cost_rules", { order: [["valid_from", "desc"]] }).rows;
   const suppliers = useRows("suppliers").rows; const kinds = useRows("product_kinds").rows; const stock = useRows("v_product_stock").rows; const sales = useRows("v_product_sales").rows;
   const [dlg, setDlg] = useState<null | { row?: any }>(null);
-  const r = (id: string, type: string) => rules.find(x => x.product_id === id && x.order_type === type);
+  const [costPreview, setCostPreview] = useState<null | { rows: any[]; go: () => void }>(null);
+  // the rule that applies today (a version that starts later is not shown yet)
+  const r = (id: string, type: string) => rules.find(x => x.product_id === id && x.order_type === type && x.valid_from <= today());
   const year = new Date().getFullYear();
   const sName = Object.fromEntries(suppliers.map(s => [s.id, s.name]));
   const rule = (x: any, cur: string) => !x || (x.cost_basis == null && x.share_above_basis == null) ? <Pill tone="amber">no rule</Pill>
@@ -95,6 +98,7 @@ export function Products() {
     ...TYPES.flatMap(t => { const c = t === "FOB" ? "$" : "€"; const k = t.toLowerCase(); return [
       { name: `${k}_basis`, label: `${t} cost basis (${c})`, type: "number", span: 1 }, { name: `${k}_share`, label: `${t} share above basis %`, type: "percent", span: 1 },
       { name: `${k}_royalty`, label: `${t} royalty per piece (${c})`, type: "number", span: 1 }] as Field[]; }),
+    ...(dlg?.row ? [{ name: "cost_valid_from", label: "A changed cost rule is valid from", type: "date", span: 1, hint: "Earlier orders keep the old rule. Choose an earlier date only if you want to correct the past: you see the effect first." } as Field] : []),
     { name: "carton_dimensions", label: "Carton (L x W x H cm)", span: 1 }, { name: "carton_weight_kg", label: "Carton weight (kg)", type: "number", span: 1 }, { name: "units_per_carton", label: "Pieces per carton", type: "number", span: 1 },
     { name: "units_20ft", label: "Pieces 20ft", type: "number", span: 1 }, { name: "units_40ft", label: "Pieces 40ft", type: "number", span: 1 }, { name: "units_40hc", label: "Pieces 40HC", type: "number", span: 1 }, { name: "notes", label: "Note", type: "textarea" }];
   return <>
@@ -104,17 +108,40 @@ export function Products() {
       { key: "fob", header: "FOB cost rule", value: p => p.fob?.cost_basis, render: p => rule(p.fob, "USD") }, { key: "exw", header: "EXW cost rule", value: p => p.exw?.cost_basis, render: p => rule(p.exw, "EUR") },
       { key: "stock", header: "NL stock", align: "right", render: p => Number(p.stock) ? qty(p.stock) : "–" }, { key: "units", header: `Sold ${year}`, align: "right", render: p => p.units ? qty(p.units) : "–" }]} /></Section>
     <FormDialog open={!!dlg} onClose={() => setDlg(null)} title={dlg?.row ? "Edit product" : "New product"} fields={fields}
-      description="A changed cost rule applies to orders whose supplier invoice has not been entered yet. Orders with a supplier invoice keep their final cost."
+      description="A changed cost rule is saved as a new version that starts on the chosen date; the old version stays. Orders with a supplier invoice or a completed status keep their final cost."
       initial={dlg?.row ? { ...dlg.row, ...Object.fromEntries(TYPES.flatMap(t => { const x = dlg.row[t.toLowerCase()]; const k = t.toLowerCase(); return [[`${k}_basis`, x?.cost_basis], [`${k}_share`, x?.share_above_basis], [`${k}_royalty`, x?.royalty_per_unit]]; })) } : {}}
-      onSubmit={v => save(async () => {
-        const p: any = {}; const rs: any = {};
-        for (const [k, x] of Object.entries(v)) (/^(fob|exw)_/.test(k) ? rs : p)[k] = x;
-        const id = dlg?.row ? (await db.update("products", { id: dlg.row.id }, p), dlg.row.id) : (await db.insert("products", p)).id;
-        for (const t of TYPES) { const k = t.toLowerCase(); const body = { cost_basis: rs[`${k}_basis`], share_above_basis: rs[`${k}_share`], royalty_per_unit: rs[`${k}_royalty`] };
-          const ex = dlg?.row?.[k];
-          if (ex) await db.update("product_cost_rules", { product_id: id, order_type: t, valid_from: ex.valid_from }, body);
-          else if (Object.values(body).some(x => x != null)) await db.insert("product_cost_rules", { product_id: id, order_type: t, ...body }); }
-      }, "Product saved")} />
+      onSubmit={async v => {
+        const p: any = {}; const rs: any = {}; const validFrom: string = v.cost_valid_from || today();
+        for (const [k, x] of Object.entries(v)) { if (k === "cost_valid_from") continue; (/^(fob|exw)_/.test(k) ? rs : p)[k] = x; }
+        const num = (x: any) => (x === null || x === undefined || x === "" ? null : Number(x));
+        const bodyOf = (t: string) => { const k = t.toLowerCase(); return { cost_basis: num(rs[`${k}_basis`]), share_above_basis: num(rs[`${k}_share`]), royalty_per_unit: num(rs[`${k}_royalty`]) }; };
+        const exOf = (t: string) => dlg?.row?.[t.toLowerCase()];
+        const changedTypes = TYPES.filter(t => { const ex = exOf(t), b = bodyOf(t);
+          return ex ? (num(ex.cost_basis) !== b.cost_basis || num(ex.share_above_basis) !== b.share_above_basis || num(ex.royalty_per_unit) !== b.royalty_per_unit) : false; });
+        const doSave = () => save(async () => {
+          const id = dlg?.row ? (await db.update("products", { id: dlg.row.id }, p), dlg.row.id) : (await db.insert("products", p)).id;
+          for (const t of TYPES) { const body = bodyOf(t); const ex = exOf(t);
+            if (ex) { if (!changedTypes.includes(t)) continue;
+              if (ex.valid_from === validFrom) await db.update("product_cost_rules", { product_id: id, order_type: t, valid_from: validFrom }, body);
+              else await db.insert("product_cost_rules", { product_id: id, order_type: t, valid_from: validFrom, ...body }); }
+            else if (Object.values(body).some(x => x != null)) await db.insert("product_cost_rules", { product_id: id, order_type: t, ...body }); }
+        }, "Product saved");
+        if (!changedTypes.length) return doSave();
+        let rows: any[] = [];
+        try { for (const t of changedTypes) { const b = bodyOf(t);
+          rows.push(...(await db.rpc<any[]>("preview_cost_rule_change", { p_product: dlg!.row.id, p_order_type: t, p_valid_from: validFrom, p_cost_basis: b.cost_basis, p_share: b.share_above_basis, p_royalty: b.royalty_per_unit })).map(x => ({ ...x, type: t }))); } }
+        catch (e) { toast.error(errorText(e)); return false; }
+        if (!rows.length) return doSave();
+        setCostPreview({ rows, go: () => { doSave(); } });
+      }} />
+    <ConfirmDialog open={!!costPreview} onClose={() => setCostPreview(null)} title="This cost change moves existing margins" confirmLabel="Save the new cost rule"
+      body={costPreview && <div className="space-y-2"><p>{costPreview.rows.length} order line(s) without final costs get another margin:</p>
+        <div className="max-h-56 overflow-y-auto rounded border text-xs"><table className="w-full">
+          <thead><tr className="border-b bg-muted/40 text-left"><th className="px-2 py-1">PI</th><th className="px-2 py-1">Customer</th><th className="px-2 py-1">Status</th><th className="px-2 py-1 text-right">Margin now</th><th className="px-2 py-1 text-right">Margin after</th></tr></thead>
+          <tbody>{costPreview.rows.map((x, i) => <tr key={i} className="border-b last:border-0"><td className="px-2 py-1">{x.pi_number ?? "draft"}</td><td className="px-2 py-1">{x.customer_name}</td><td className="px-2 py-1">{x.status}</td>
+            <td className="px-2 py-1 text-right">{money(x.margin_before, x.type === "FOB" ? "USD" : "EUR")}</td><td className="px-2 py-1 text-right font-semibold">{money(x.margin_after, x.type === "FOB" ? "USD" : "EUR")}</td></tr>)}</tbody></table></div>
+        <p>Completed orders and orders with a supplier invoice are not affected.</p></div>}
+      onConfirm={() => costPreview?.go()} />
   </>;
 }
 

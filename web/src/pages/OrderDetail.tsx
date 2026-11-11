@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft, Ban, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApp, useNav, useRows } from "@/app/store";
@@ -24,6 +25,12 @@ export default function OrderDetail({ id }: { id: string }) {
   const stock = useRows("v_batch_item_stock").rows;
   const [dlg, setDlg] = useState<null | { kind: string; row?: any }>(null);
   const [belowBasis, setBelowBasis] = useState<null | { values: any; row?: any; basis: number }>(null);
+  const [why, setWhy] = useState<null | { line: any; rows: any[] }>(null);
+  const showWhy = async (l: any) => {
+    try { setWhy({ line: l, rows: await db.rpc<any[]>("explain_unit_cost", { p_product: l.product_id, p_customer: o.customer_id, p_order_type: o.order_type, p_unit_price: l.unit_price,
+      p_batch_item: l.batch_item_id, p_override: l.cost_override, p_date: l.line_date ?? o.po_date }) }); }
+    catch (e) { toast.error(String((e as any)?.message ?? e)); }
+  };
   const [confirm, setConfirm] = useState<null | { title: string; body: string; label: string; go: () => void }>(null);
 
   const pName = useMemo(() => Object.fromEntries(products.map(p => [p.id, p.name])), [products]);
@@ -114,7 +121,7 @@ export default function OrderDetail({ id }: { id: string }) {
           { key: "qty", header: "Qty", align: "right", render: l => <>{qty(l.qty)}{l.quantity_cancelled > 0 && <div className="text-xs text-red-700">{qty(l.quantity_cancelled)} cancelled</div>}</> },
           { key: "unit_price", header: "Price", align: "right", render: l => money(l.unit_price, cur) },
           { key: "unit_cost", header: "Cost", align: "right", render: l => l.unit_cost == null ? <Pill tone="red">missing</Pill>
-              : <div>{money(l.unit_cost, cur, 3)}<div className="text-xs text-muted-foreground">{SOURCE_LABEL[l.cost_source]}{l.cost_is_final ? " · final" : ""}</div></div> },
+              : <div>{money(l.unit_cost, cur, 3)}<div className="text-xs text-muted-foreground">{SOURCE_LABEL[l.cost_source]}{l.cost_is_final ? " · final" : ""} · <button type="button" className="underline hover:text-foreground" onClick={() => showWhy(l)}>why?</button></div></div> },
           { key: "revenue", header: "Revenue", align: "right", render: l => money(l.revenue, cur) },
           { key: "total_cost", header: "Total cost", align: "right", render: l => money(l.total_cost, cur) },
           { key: "margin", header: "Margin", align: "right", render: l => <span className={Number(l.margin) < 0 ? "font-semibold text-red-700" : ""}>{money(l.margin, cur)}<div className="text-xs text-muted-foreground">{marginPct(l.margin_pct, l.cost_known === false ? 1 : 0)}</div></span> },
@@ -152,6 +159,10 @@ export default function OrderDetail({ id }: { id: string }) {
     <FormDialog open={dlg?.kind === "line"} onClose={() => setDlg(null)} title={dlg?.row ? "Edit line" : "Add line"} fields={lineFields}
       initial={dlg?.row ?? belowBasis?.values} onSubmit={submitLine}
       description="The purchase price is calculated: override, then batch, then price agreement, then product rule." />
+    <ConfirmDialog open={!!why} onClose={() => setWhy(null)} title={`Why this purchase price? ${why ? pName[why.line.product_id] ?? "" : ""}`} confirmLabel="Close" onConfirm={() => setWhy(null)}
+      body={why && <div className="space-y-2 text-sm"><p className="text-xs text-muted-foreground">Order of priority: override, batch, price agreement, product rule. The first that applies wins.{why.line.cost_is_final ? " This price is final; the explanation below follows today's rules." : ""}</p>
+        <ol className="space-y-1.5">{why.rows.map((r: any) => <li key={r.step} className={"rounded border px-2 py-1.5 " + (r.applies ? "border-sky-300 bg-sky-50" : "")}>
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{r.step === 5 ? "Result" : SOURCE_LABEL[r.source] ?? r.source}{r.applies && r.step !== 5 ? " · used" : ""}</div>{r.detail}</li>)}</ol></div>} />
     <ConfirmDialog open={!!belowBasis} onClose={() => setBelowBasis(null)} danger title="Selling below the cost basis"
       body={belowBasis && <>The sale price <b>{money(belowBasis.values.unit_price, cur)}</b> is below the cost basis <b>{money(belowBasis.basis, cur)}</b> for this product. This line would be sold at a loss.</>}
       confirmLabel="Save anyway" onConfirm={() => belowBasis && saveLine(belowBasis.values, belowBasis.row)} />
