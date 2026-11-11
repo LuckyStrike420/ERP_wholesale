@@ -1,0 +1,12 @@
+node_modules/
+data/
+.env
+
+# business data, regenerate with scripts/build-seed.ts
+web/public/seed.json
+reports/
+.env
+.env.local
+web/.env
+web/dist/
+*.xlsx

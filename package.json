@@ -1,0 +1,28 @@
+{
+  "name": "yp-orders",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "tsx --test tests/*.test.ts",
+    "import": "tsx src/import/cli.ts",
+    "seed": "tsx scripts/build-seed.ts",
+    "supabase:setup": "tsx scripts/supabase-setup.ts",
+    "web": "cd web && pnpm dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "xlsx": "^0.18.5"
+  },
+  "type": "module",
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
+}
