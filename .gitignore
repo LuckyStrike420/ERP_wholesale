@@ -1,5 +1,5 @@
 node_modules/
-data/
+/data/
 .env
 
 # business data, regenerate with scripts/build-seed.ts
