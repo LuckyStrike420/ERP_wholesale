@@ -10,7 +10,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0004_reporting_views.sql` | `0004_reporting_views` | ja |
 | `0005_api_hardening.sql` | `0005_api_hardening` | ja |
 | `0006_function_settings.sql` | `0006_function_settings` | ja |
-| `0007_unknown_is_not_zero.sql` | — | **nee, wacht op akkoord na uw beoordeling (pakket 1)** |
+| `0007_unknown_is_not_zero.sql` | `0007_unknown_is_not_zero` | ja (11 nov 2026) |
 
 ## Regels
 
