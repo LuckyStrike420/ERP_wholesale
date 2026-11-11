@@ -40,6 +40,9 @@ jobs:
       # The web app imports ../src/import/importer.ts, which resolves its packages from the repo root.
       - run: npm ci
         working-directory: .
+      # Stop the deploy when a database rule or calculation test fails (the tests run the same migrations on a local Postgres).
+      - run: npm test
+        working-directory: .
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - uses: actions/upload-pages-artifact@v3

@@ -46,7 +46,8 @@ function Page({ route }: { route: string }): ReactNode {
 
 function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; onSignOut: () => void }) {
   const [route, nav] = useRoute();
-  const attention = useRows("v_attention").rows.filter(a => a.severity !== "info").length;
+  const counts = useRows("v_attention_counts").rows[0];
+  const attention = Number(counts?.actionable ?? 0), infoCount = Number(counts?.info_count ?? 0);
   return (
     <NavCtx.Provider value={nav}>
       <div className="flex min-h-screen bg-slate-50 text-slate-900">
@@ -63,7 +64,7 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
                   <button key={i.route} onClick={() => nav(i.route)}
                     className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm", section(route) === i.route ? "bg-sky-50 font-medium text-sky-900" : "text-slate-700 hover:bg-slate-100")}>
                     <i.icon className="h-4 w-4 shrink-0" /><span className="flex-1">{i.label}</span>
-                    {i.route === "dashboard" && attention > 0 && <span className="rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">{attention}</span>}
+                    {i.route === "dashboard" && attention > 0 && <span title={`${attention} item(s) to act on${infoCount ? `; ${infoCount} more are information only` : ""}`} className="rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">{attention}</span>}
                   </button>))}
               </div>))}
           </nav>

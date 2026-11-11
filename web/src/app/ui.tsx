@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { errorText } from "./store";
+import { errorText, useLoading } from "./store";
 import { PAYMENT_LABEL, STATUS_LABEL } from "./format";
 
 export function PageHeader({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
@@ -66,9 +66,10 @@ const embedded = (() => { try { return window.self !== window.top; } catch { ret
 const toCsv = (cols: Col[], rows: any[]) => [cols.map(c => c.header), ...rows.map(r => cols.map(c => (c.value ? c.value(r) : r[c.key]) ?? ""))]
   .map(line => line.map(v => /[",\n;]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v)).join(",")).join("\n");
 
-export function DataTable<T extends Record<string, any>>({ rows, cols, onRow, search, empty = "Nothing here yet", exportName, toolbar, dense, initialSort }: {
-  rows: T[]; cols: Col<T>[]; onRow?: (r: T) => void; search?: boolean; empty?: string; exportName?: string; toolbar?: ReactNode; dense?: boolean; initialSort?: [string, 1 | -1];
+export function DataTable<T extends Record<string, any>>({ rows, cols, onRow, search, empty = "Nothing here yet", exportName, toolbar, dense, initialSort, loading }: {
+  rows: T[]; cols: Col<T>[]; onRow?: (r: T) => void; search?: boolean; empty?: string; exportName?: string; toolbar?: ReactNode; dense?: boolean; initialSort?: [string, 1 | -1]; loading?: boolean;
 }) {
+  const anyLoading = useLoading(); const isLoading = loading ?? anyLoading;
   const [q, setQ] = useState(""); const [sort, setSort] = useState<[string, 1 | -1] | null>(initialSort ?? null);
   const val = (c: Col<T>, r: T) => (c.value ? c.value(r) : r[c.key]);
   const shown = useMemo(() => {
@@ -113,7 +114,7 @@ export function DataTable<T extends Record<string, any>>({ rows, cols, onRow, se
               <tr key={r.id ?? i} onClick={onRow ? () => onRow(r) : undefined} className={cn("border-b last:border-0", onRow && "cursor-pointer hover:bg-muted/50")}>
                 {cols.map(c => <td key={c.key} className={cn("px-3 align-top", dense ? "py-1.5" : "py-2", c.align === "right" && "text-right tabular-nums")}>{c.render ? c.render(r) : (r[c.key] ?? "–")}</td>)}
               </tr>))}
-            {!shown.length && <tr><td colSpan={cols.length} className="px-3 py-8 text-center text-sm text-muted-foreground">{empty}</td></tr>}
+            {!shown.length && <tr><td colSpan={cols.length} className="px-3 py-8 text-center text-sm text-muted-foreground">{isLoading && !rows.length ? "Loading…" : empty}</td></tr>}
           </tbody>
         </table>
       </div>

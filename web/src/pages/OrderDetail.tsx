@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, Ban, Pencil, Plus, Trash2 } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { useApp, useNav, useRows } from "@/app/store";
 import { ConfirmDialog, DataTable, FormDialog, KV, PageHeader, PaymentPill, Pill, Section, SeverityPill, StatusPill, selectClass, type Field } from "@/app/ui";
-import { date, money, pct, qty, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER, SHIP_LABEL, today } from "@/app/format";
+import { date, money, marginPct, pct, qty, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER, SHIP_LABEL, today } from "@/app/format";
 import { orderFields } from "./Orders";
 
 export default function OrderDetail({ id }: { id: string }) {
@@ -83,7 +83,7 @@ export default function OrderDetail({ id }: { id: string }) {
           ["Received", money(o.paid, cur)],
           ...(Number(o.written_off) ? [["Written off", money(o.written_off, cur)] as [any, any]] : []),
           ["Outstanding", <b className={Number(o.overdue_amount) > 0 ? "text-red-700" : ""}>{money(o.outstanding, cur)}</b>],
-          ["Margin", `${money(o.margin, cur)} · ${pct(o.margin_pct)}`],
+          ["Margin", Number(o.cost_missing_lines) > 0 ? <span className="text-amber-700">{money(o.margin, cur)} · incomplete: {o.cost_missing_lines} line(s) without cost price</span> : `${money(o.margin, cur)} · ${marginPct(o.margin_pct, 0)}`],
         ]} />
       </Section>
       <Section title="Payment schedule">
@@ -117,7 +117,7 @@ export default function OrderDetail({ id }: { id: string }) {
               : <div>{money(l.unit_cost, cur, 3)}<div className="text-xs text-muted-foreground">{SOURCE_LABEL[l.cost_source]}{l.cost_is_final ? " · final" : ""}</div></div> },
           { key: "revenue", header: "Revenue", align: "right", render: l => money(l.revenue, cur) },
           { key: "total_cost", header: "Total cost", align: "right", render: l => money(l.total_cost, cur) },
-          { key: "margin", header: "Margin", align: "right", render: l => <span className={Number(l.margin) < 0 ? "font-semibold text-red-700" : ""}>{money(l.margin, cur)}<div className="text-xs text-muted-foreground">{pct(l.margin_pct)}</div></span> },
+          { key: "margin", header: "Margin", align: "right", render: l => <span className={Number(l.margin) < 0 ? "font-semibold text-red-700" : ""}>{money(l.margin, cur)}<div className="text-xs text-muted-foreground">{marginPct(l.margin_pct, l.cost_known === false ? 1 : 0)}</div></span> },
           { key: "po", header: "Our PO", value: l => poNo[l.purchase_order_id], render: l => l.purchase_order_id ? <button className="text-sky-700 underline" onClick={() => nav(`po-${l.purchase_order_id}`)}>{poNo[l.purchase_order_id]}</button> : "–" },
           { key: "batch", header: "Batch", value: l => batchNo[l.batch_item_id], render: l => batchNo[l.batch_item_id] ?? "–" },
           { key: "act", header: "", width: "4.5rem", render: l => locked ? null : <span className="flex justify-end gap-1">

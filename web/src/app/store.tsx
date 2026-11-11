@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { toast } from "sonner";
 import type { DataClient, Row, SelectOpts } from "@/data/client";
 
@@ -31,6 +31,11 @@ export function AppProvider({ db, children }: { db: DataClient; children: ReactN
   return <C.Provider value={{ db, version, refresh, run, save }}>{children}</C.Provider>;
 }
 
+// number of queries in flight, so a table can say "Loading…" instead of claiming it is empty (OMS-029)
+let pending = 0; const listeners = new Set<() => void>();
+const setPending = (d: number) => { pending += d; listeners.forEach(l => l()); };
+export const useLoading = () => useSyncExternalStore(cb => { listeners.add(cb); return () => { listeners.delete(cb); }; }, () => pending > 0);
+
 /** rows of a table or view; reloads after every change made through run() */
 export function useRows<T = any>(from: string | null, opts: SelectOpts = {}): { rows: T[]; loading: boolean } {
   const { db, version } = useApp();
@@ -40,8 +45,10 @@ export function useRows<T = any>(from: string | null, opts: SelectOpts = {}): { 
   useEffect(() => {
     if (!from) { setState({ rows: [], loading: false }); return; }
     const n = ++seq.current;
+    setPending(1);
     db.select<T>(from, opts).then(rows => { if (n === seq.current) setState({ rows, loading: false }); })
-      .catch(e => { toast.error(errorText(e)); if (n === seq.current) setState({ rows: [], loading: false }); });
+      .catch(e => { toast.error(errorText(e)); if (n === seq.current) setState({ rows: [], loading: false }); })
+      .finally(() => setPending(-1));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, key, version]);
   return state;

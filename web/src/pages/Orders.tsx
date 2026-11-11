@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApp, useNav, useRows } from "@/app/store";
 import { DataTable, FormDialog, PageHeader, PaymentPill, Section, StatusPill, selectClass, type Field } from "@/app/ui";
-import { date, money, pct, STATUS_LABEL, today } from "@/app/format";
+import { date, money, marginPct, STATUS_LABEL, today } from "@/app/format";
 
 export const orderFields = (customers: any[]): Field[] => [
   { name: "customer_id", label: "Customer", type: "select", required: true, options: customers.map(c => ({ value: c.id, label: c.name })) },
@@ -37,7 +37,7 @@ export default function Orders() {
           { key: "po_date", header: "PO date", render: o => date(o.po_date) },
           { key: "status", header: "Status", render: o => <StatusPill status={o.status} /> },
           { key: "total_receivable", header: "Order total", align: "right", render: o => money(o.total_receivable, o.currency) },
-          { key: "margin_pct", header: "Margin", align: "right", render: o => pct(o.margin_pct) },
+          { key: "margin_pct", header: "Margin", align: "right", render: o => <span className={Number(o.cost_missing_lines) > 0 ? "text-amber-700" : ""} title={Number(o.cost_missing_lines) > 0 ? `${o.cost_missing_lines} line(s) without cost price` : undefined}>{marginPct(o.margin_pct, o.cost_missing_lines)}</span> },
           { key: "outstanding", header: "Outstanding", align: "right", render: o => <span className={Number(o.overdue_amount) > 0 ? "font-semibold text-red-700" : ""}>{money(o.outstanding, o.currency)}</span> },
           { key: "payment_status", header: "Payment", render: o => <PaymentPill status={o.payment_status} /> },
           { key: "balance_due_date", header: "Due", render: o => Number(o.overdue_amount) > 0 ? <span className="font-semibold text-red-700">{o.days_late} days late</span>

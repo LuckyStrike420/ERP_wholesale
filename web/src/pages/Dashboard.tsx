@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNav, useRows } from "@/app/store";
 import { DataTable, PageHeader, Section, SeverityPill, selectClass } from "@/app/ui";
-import { date, money, monthName, pct } from "@/app/format";
+import { date, money, marginPct, monthName } from "@/app/format";
 
 export function entityRoute(a: any, lineOrder: Record<string, string>): string {
   if (a.entity === "sales_orders") return `order-${a.entity_id}`;
@@ -18,6 +18,9 @@ export default function Dashboard() {
   const monthly = useRows("v_revenue_monthly").rows;
   const attention = useRows("v_attention").rows;
   const cash = useRows("v_cash_flow").rows;
+  const cashSummary = useRows("v_cash_flow_summary").rows;
+  const yearly = useRows("v_revenue_yearly").rows;
+  const counts = useRows("v_attention_counts").rows[0];
   const lines = useRows("v_order_lines").rows;
   const orders = useRows("v_orders").rows;
   const activity = useRows("audit_log", { order: [["id", "desc"]], limit: 12 }).rows;
@@ -28,10 +31,10 @@ export default function Dashboard() {
   const types = [{ type: "EXW", cur: "EUR" }, { type: "FOB", cur: "USD" }];
   const sum = (rows: any[], k: string) => rows.reduce((s, r) => s + Number(r[k] ?? 0), 0);   // adding up database figures for display
   const kpi = types.map(t => {
-    const m = monthly.filter(r => r.year === year && r.order_type === t.type);
     const o = out.find(r => r.currency === t.cur) ?? {};
-    const revenue = sum(m, "revenue"), margin = sum(m, "margin");
-    return { ...t, revenue, margin, marginPct: revenue ? margin / revenue : null, ...o,
+    const y = yearly.find(r => r.year === year && r.order_type === t.type) ?? {};
+    const revenue = Number(y.revenue ?? 0), margin = Number(y.margin ?? 0);
+    return { ...t, revenue, margin, marginPct: y.margin_pct ?? null, costMissing: Number(y.cost_missing_lines ?? 0), ...o,
       completed: orders.filter(x => x.order_type === t.type && x.status === "completed").length };
   });
   const yearRows = monthly.filter(r => r.year === year);
@@ -59,7 +62,7 @@ export default function Dashboard() {
         <tbody>
           {kpi.map(k => <tr key={k.type} className="border-b text-right last:border-0">
             <td className="px-4 py-3 text-left font-semibold">{k.type} <span className="font-normal text-muted-foreground">{k.cur}</span></td>
-            <td className="px-4 py-3 text-base font-semibold">{money(k.revenue, k.cur)}</td><td className="px-4 py-3">{money(k.margin, k.cur)}</td><td className="px-4 py-3">{pct(k.marginPct)}</td>
+            <td className="px-4 py-3 text-base font-semibold">{money(k.revenue, k.cur)}</td><td className="px-4 py-3">{money(k.margin, k.cur)}</td><td className={"px-4 py-3 " + (k.costMissing ? "text-amber-700" : "")} title={k.costMissing ? `${k.costMissing} line(s) without cost price` : undefined}>{marginPct(k.marginPct, k.costMissing)}</td>
             <td className="px-4 py-3 text-base font-semibold">{money(k.receivable ?? 0, k.cur)}</td>
             <td className={"px-4 py-3 " + (Number(k.receivable_overdue) > 0 ? "font-semibold text-red-700" : "text-muted-foreground")}>{money(k.receivable_overdue ?? 0, k.cur)}</td>
             <td className="px-4 py-3 text-base font-semibold">{money(k.payable ?? 0, k.cur)}</td>
@@ -69,14 +72,19 @@ export default function Dashboard() {
             {fxMissing ? <td colSpan={9} className="px-4 py-2 text-left text-muted-foreground">Needs a USD exchange rate: add one under Admin.</td>
               : <><td className="px-4 py-2 font-semibold">{money(eurTotal.revenue, "EUR")}</td><td className="px-4 py-2">{money(eurTotal.margin, "EUR")}</td><td colSpan={8}></td></>}</tr>
         </tbody></table></div>
+      {kpi.some(k => k.costMissing) && <p className="border-t px-4 py-2 text-xs text-amber-800">Margin is incomplete: {kpi.filter(k => k.costMissing).map(k => `${k.type}: ${k.costMissing} order line(s) have no cost price`).join("; ")}. The margin amounts above count these lines at zero cost. Fill in the cost price to complete them.</p>}
     </Section>
 
     <div className="grid gap-5 xl:grid-cols-2">
-      <Section title={`Needs attention · ${attention.length}`}>
+      <Section title={`Needs attention · ${Number(counts?.actionable ?? 0)}${Number(counts?.info_count ?? 0) ? ` + ${counts.info_count} info` : ""}`}>
         <DataTable dense rows={[...attention].sort((a, b) => SEV[a.severity] - SEV[b.severity])} onRow={a => nav(entityRoute(a, lineOrder))} empty="Nothing needs attention"
           cols={[{ key: "severity", header: "", width: "4.5rem", render: a => <SeverityPill s={a.severity} /> }, { key: "reference", header: "Ref", width: "7rem" }, { key: "message", header: "What" }]} />
       </Section>
       <Section title="Expected cash flow">
+        {cashSummary.length > 0 && <div className="space-y-0.5 border-b px-4 py-2 text-xs tabular-nums">
+          {cashSummary.map(s => <div key={s.direction + s.currency}><span className="font-medium">{s.direction === "in" ? "In" : "Out"} {s.currency}:</span> {money(s.total_amount, s.currency)} in total · {money(s.dated_amount, s.currency)} with a due date
+            {Number(s.undated_items) > 0 && <span className="text-amber-700"> · {money(s.undated_amount, s.currency)} without a due date ({s.undated_items} item{Number(s.undated_items) === 1 ? "" : "s"})</span>}</div>)}
+        </div>}
         <DataTable dense rows={[...cash].sort((a, b) => String(a.due_date ?? "9").localeCompare(String(b.due_date ?? "9")))} empty="No open amounts"
           onRow={c => nav(c.direction === "in" ? `order-${c.order_id}` : `po-${c.order_id}`)}
           cols={[{ key: "due_date", header: "Due", render: c => c.due_date ? date(c.due_date) : <span className="text-muted-foreground">no due date</span> },

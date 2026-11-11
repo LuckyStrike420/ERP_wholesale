@@ -4,6 +4,8 @@ export const money = (v: any, cur?: string | null, dp = 2) =>
   `${cur ? (SYM[cur] ?? cur + " ") : ""}${Number(v).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 export const qty = (v: any) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-US"));
 export const pct = (v: any, dp = 1) => (v === null || v === undefined ? "–" : `${(Number(v) * 100).toFixed(dp)}%`);
+/** margin %: "incomplete" (not 100%) when cost prices are missing; the database decides, the screen only shows it (OMS-001) */
+export const marginPct = (pctValue: any, missing: any) => (Number(missing) > 0 ? "incomplete" : pct(pctValue));
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const date = (v: any) => {
   if (!v) return "–";

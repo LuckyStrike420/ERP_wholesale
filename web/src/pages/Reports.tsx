@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNav, useRows } from "@/app/store";
 import { DataTable, PageHeader, PaymentPill, Section, StatusPill, selectClass, type Col } from "@/app/ui";
-import { date, money, monthName, pct, qty } from "@/app/format";
+import { date, money, marginPct, monthName, qty } from "@/app/format";
 
 const m = (key: string, header: string): Col => ({ key, header, align: "right", render: r => money(r[key], r.currency) });
 
@@ -16,6 +16,7 @@ export default function Reports() {
   const pos = useRows("v_purchase_orders", { order: [["po_number", "desc"]] }).rows;
   const allocs = useRows("v_allocations", { order: [["payment_date", "desc"]] }).rows;
   const cash = useRows("v_cash_flow", { order: [["due_date", "asc"]] }).rows;
+  const coverage = useRows("v_overdue_coverage").rows[0];
   const years = [...new Set(monthly.map(r => r.year))].sort((a, b) => b - a);
   const [year, setYear] = useState<string>(""); const [cur, setCur] = useState("");
   const y = year ? Number(year) : years[0];
@@ -48,7 +49,7 @@ export default function Reports() {
       <TabsContent value="monthly"><Section title={`Monthly order value ${y ?? ""}, by PO date`}>
         <DataTable rows={pick(monthly).filter(r => r.year === y).map(r => ({ ...r, id: `${r.year}-${r.month}-${r.order_type}` }))} exportName={`monthly-${y}`} toolbar={<>{yearSel}{curSel}</>}
           cols={[{ key: "month", header: "Month", render: r => monthName(r.month) }, { key: "order_type", header: "Type" }, { key: "units", header: "Units", align: "right", render: r => qty(r.units) },
-            m("revenue", "Revenue"), m("margin", "Margin"), { key: "margin_pct", header: "Margin %", align: "right", value: r => (Number(r.revenue) ? Number(r.margin) / Number(r.revenue) : null), render: r => (Number(r.revenue) ? pct(Number(r.margin) / Number(r.revenue)) : "–") },
+            m("revenue", "Revenue"), m("margin", "Margin"), { key: "margin_pct", header: "Margin %", align: "right", value: r => r.margin_pct, render: r => <span className={Number(r.cost_missing_lines) > 0 ? "text-amber-700" : ""}>{marginPct(r.margin_pct, r.cost_missing_lines)}</span> },
             { key: "revenue_reporting", header: "Revenue in EUR", align: "right", render: r => (r.fx_rate_missing ? <span className="text-amber-700">no rate</span> : money(r.revenue_reporting, "EUR")) }]} />
         <p className="border-t px-4 py-2 text-xs text-muted-foreground">"Revenue in EUR" uses the exchange rate on the PO date. Rates are entered under Admin → Exchange rates.</p>
       </Section></TabsContent>
@@ -68,7 +69,13 @@ export default function Reports() {
             { key: "deposit_due_date", header: "Deposit due", render: p => date(p.deposit_due_date) }, { key: "balance_due_date", header: "Balance due", render: p => date(p.balance_due_date) }, { key: "days_late", header: "Days late", align: "right", render: p => p.days_late ?? "–" }]} />
       </Section></TabsContent>
       <TabsContent value="overdue"><Section title="Overdue, customers and suppliers">
-        <DataTable rows={pick(overdue)} search exportName="overdue" toolbar={curSel} onRow={r => nav(r.go)} empty="Nothing is overdue"
+        {coverage && <div className="grid gap-px border-b bg-border text-sm sm:grid-cols-3">
+          <div className="bg-white px-4 py-2"><div className="text-xs text-muted-foreground">Overdue by due date</div><div className="font-semibold tabular-nums">{coverage.overdue_items}</div></div>
+          <div className="bg-white px-4 py-2"><div className="text-xs text-muted-foreground">EXW payment reminders</div><div className="font-semibold tabular-nums">{coverage.reminder_items}</div></div>
+          <div className={"px-4 py-2 " + (Number(coverage.undated_items) > 0 ? "bg-amber-50" : "bg-white")}><div className="text-xs text-muted-foreground">Open amounts without a due date</div><div className="font-semibold tabular-nums">{coverage.undated_items}</div></div>
+        </div>}
+        {coverage && Number(coverage.undated_items) > 0 && <p className="border-b px-4 py-2 text-xs text-amber-800">{coverage.undated_items} open amount(s) have no due date, so they cannot show as overdue. See the Cash-flow forecast tab and fill in the due dates.</p>}
+        <DataTable rows={pick(overdue)} search exportName="overdue" toolbar={curSel} onRow={r => nav(r.go)} empty={coverage && (Number(coverage.undated_items) > 0 || Number(coverage.reminder_items) > 0) ? "No amount is overdue by its due date. See the counts above: reminders and amounts without a due date still need attention." : "Nothing is overdue"}
           cols={[{ key: "side", header: "Side" }, { key: "party", header: "Party" }, { key: "ref", header: "Reference" }, m("amount", "Overdue"), { key: "days", header: "Days late", align: "right" }]} />
       </Section></TabsContent>
       <TabsContent value="payments"><Section title="Payment history">
