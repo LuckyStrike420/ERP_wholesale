@@ -37,6 +37,9 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
+      # The web app imports ../src/import/importer.ts, which resolves its packages from the repo root.
+      - run: npm ci
+        working-directory: .
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - uses: actions/upload-pages-artifact@v3
