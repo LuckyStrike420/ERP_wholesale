@@ -7,6 +7,8 @@ const files = import.meta.glob("../../../supabase/migrations/*.sql", { query: "?
 const MIGRATIONS = Object.keys(files).sort().map(p => ({ name: p.split("/").pop()!, sql: files[p] }));
 
 const DB_NAME = "idb://yp-orders-test-v1";
+// objects and arrays go into json columns as JSON text (Supabase does the same over its API)
+const val = (v: any) => v !== null && typeof v === "object" && !(v instanceof Date) && !(v instanceof Uint8Array) ? JSON.stringify(v) : v;
 const id = (s: string) => { if (!/^[a-z_][a-z0-9_]*$/.test(s)) throw new Error(`Bad identifier ${s}`); return `"${s}"`; };
 // same shapes as Supabase returns: numbers for numeric, ISO strings for dates
 const parsers = { [types.NUMERIC]: (v: string) => Number(v), [types.INT8]: (v: string) => Number(v),
@@ -76,11 +78,11 @@ export async function createLocalClient(): Promise<DataClient> {
     async insert<T>(table: string, row: Row) {
       const keys = Object.keys(row).filter(k => row[k] !== undefined);
       const sql = `insert into ${id(table)} (${keys.map(id).join(",")}) values (${keys.map((_, i) => `$${i + 1}`).join(",")}) returning *`;
-      return (await db.query<T>(sql, keys.map(k => row[k]))).rows[0];
+      return (await db.query<T>(sql, keys.map(k => val(row[k])))).rows[0];
     },
     async update(table, match, patch) {
       const keys = Object.keys(patch).filter(k => patch[k] !== undefined); if (!keys.length) return;
-      const p = keys.map(k => patch[k]);
+      const p = keys.map(k => val(patch[k]));
       await db.query(`update ${id(table)} set ${keys.map((k, i) => `${id(k)} = $${i + 1}`).join(", ")}${where(match, p)}`, p);
     },
     async remove(table, match) { const p: any[] = []; await db.query(`delete from ${id(table)}${where(match, p)}`, p); },

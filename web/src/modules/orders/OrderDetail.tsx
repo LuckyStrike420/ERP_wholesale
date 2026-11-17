@@ -10,6 +10,7 @@ import { useOrder } from "./data";
 import { OrderTimeline } from "./Timeline";
 import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
 import { DocumentsSection } from "@/modules/documents/Documents";
+import { ShippingDocumentsSection } from "@/modules/documents/ShippingDocument";
 
 export default function OrderDetail() {
   const { ref } = useParams();
@@ -59,6 +60,7 @@ export default function OrderDetail() {
       {!["draft", "cancelled"].includes(o.status) && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
       <LinkButton to={`${base}/edit`} variant="outline"><Pencil />Edit</LinkButton>
       {o.pi_number && <LinkButton to={`${base}/pi`} variant="outline"><FileText />PI (PDF)</LinkButton>}
+      {o.invoice_number && <LinkButton to={`${base}/commercial-invoice`} variant="outline"><FileText />Invoice (PDF)</LinkButton>}
       {o.pi_number && <LinkButton to={`/orders/new?from=${encodeURIComponent(o.pi_number)}`} variant="outline"><Copy />Repeat order</LinkButton>}
       {!locked && o.status_rank < 60 && <Button variant="outline" className="text-rose-600" onClick={() => setConfirm({ title: "Cancel this order?", label: "Cancel order",
         body: "The order leaves revenue and open amounts. Payments already received stay visible as customer credit. This cannot be undone.",
@@ -142,7 +144,7 @@ export default function OrderDetail() {
     </div>
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
       <OrderTimeline o={o} />
-      <DocumentsSection entity="sales_orders" id={o.id} className="self-start" />
+      <div className="space-y-6 self-start"><ShippingDocumentsSection o={o} /><DocumentsSection entity="sales_orders" id={o.id} /></div>
     </div>
     <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)} danger title={confirm?.title ?? ""} body={confirm?.body} confirmLabel={confirm?.label} onConfirm={() => confirm?.go()} />
   </>;

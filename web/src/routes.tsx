@@ -7,7 +7,10 @@ import Dashboard from "@/modules/dashboard/Dashboard";
 import OrdersList from "@/modules/orders/OrdersList";
 import OrderDetail from "@/modules/orders/OrderDetail";
 import OrderComposer from "@/modules/orders/OrderComposer";
-import ProformaInvoice from "@/modules/orders/ProformaInvoice";
+import ProformaInvoice, { CommercialInvoice } from "@/modules/orders/ProformaInvoice";
+import { ShippingDocumentEdit, ShippingDocumentNew } from "@/modules/documents/ShippingDocument";
+import { PurchaseOrderDocument } from "@/modules/purchasing/PurchaseOrderDocument";
+import { CustomerContactForm, SupplierContactForm } from "@/modules/parties/Contacts";
 import { LineCost, OrderPurchaseOrder, OrderCorrection, OrderEdit, OrderInvoice, OrderLine, OrderPayment, OrderWriteOff } from "@/modules/orders/OrderForms";
 import { Ledger, ToPay, ToReceive, VoidPayment } from "@/modules/payments/Payments";
 import { PurchaseOrderDetail, PurchaseOrderEdit, PurchaseOrderInvoice, PurchaseOrderNew, PurchaseOrderPayment, PurchaseOrderWriteOff, PurchaseOrders } from "@/modules/purchasing/Purchasing";
@@ -28,18 +31,21 @@ export const ROUTES: Route[] = [
   r("/orders/:ref", "orders", OrderDetail), r("/orders/:ref/edit", "orders", OrderEdit),
   r("/orders/:ref/lines/:line", "orders", OrderLine), r("/orders/:ref/lines/:line/cost", "orders", LineCost),
   r("/orders/:ref/payment", "orders", OrderPayment), r("/orders/:ref/invoice", "orders", OrderInvoice),
-  r("/orders/:ref/correction", "orders", OrderCorrection), r("/orders/:ref/purchase-order", "orders", OrderPurchaseOrder), r("/orders/:ref/pi", "orders", ProformaInvoice), r("/orders/:ref/write-off", "orders", OrderWriteOff),
+  r("/orders/:ref/correction", "orders", OrderCorrection), r("/orders/:ref/purchase-order", "orders", OrderPurchaseOrder), r("/orders/:ref/pi", "orders", ProformaInvoice), r("/orders/:ref/commercial-invoice", "orders", CommercialInvoice),
+  r("/orders/:ref/documents/new", "orders", ShippingDocumentNew), r("/orders/:ref/documents/:doc", "orders", ShippingDocumentEdit), r("/orders/:ref/write-off", "orders", OrderWriteOff),
   r("/payments", "payments", ToReceive), r("/payments/suppliers", "payments", ToPay), r("/payments/ledger", "payments", Ledger),
   r("/payments/:id/void", "payments", VoidPayment),
   r("/tasks", "tasks", Tasks), r("/tasks/new", "tasks", TaskForm), r("/tasks/:id", "tasks", TaskForm),
   r("/purchasing", "purchasing", PurchaseOrders), r("/purchasing/new", "purchasing", PurchaseOrderNew),
   r("/purchasing/:po", "purchasing", PurchaseOrderDetail), r("/purchasing/:po/edit", "purchasing", PurchaseOrderEdit),
   r("/purchasing/:po/payment", "purchasing", PurchaseOrderPayment), r("/purchasing/:po/invoice", "purchasing", PurchaseOrderInvoice),
-  r("/purchasing/:po/write-off", "purchasing", PurchaseOrderWriteOff),
+  r("/purchasing/:po/write-off", "purchasing", PurchaseOrderWriteOff), r("/purchasing/:po/pdf", "purchasing", PurchaseOrderDocument),
   r("/customers", "customers", Customers), r("/customers/new", "customers", CustomerForm),
   r("/customers/:slug", "customers", CustomerDetail), r("/customers/:slug/edit", "customers", CustomerForm),
+  r("/customers/:slug/contacts/new", "customers", CustomerContactForm), r("/customers/:slug/contacts/:id", "customers", CustomerContactForm),
   r("/suppliers", "suppliers", Suppliers), r("/suppliers/new", "suppliers", SupplierForm),
   r("/suppliers/:slug", "suppliers", SupplierDetail), r("/suppliers/:slug/edit", "suppliers", SupplierForm),
+  r("/suppliers/:slug/contacts/new", "suppliers", SupplierContactForm), r("/suppliers/:slug/contacts/:id", "suppliers", SupplierContactForm),
   r("/products", "products", Products), r("/products/new", "products", ProductForm), r("/products/:slug", "products", ProductForm),
   r("/prices", "prices", Prices), r("/prices/new", "prices", PriceForm), r("/prices/:id", "prices", PriceForm),
   r("/shipping", "shipping", Shipping), r("/shipping/new", "shipping", ShipmentForm), r("/shipping/:ref/edit", "shipping", ShipmentForm),

@@ -9,6 +9,7 @@ import { DataTable, FormPage, KV, LinkButton, Loading, NotFound, PageHeader, Pay
 import { date, money, pct, termText } from "@/app/format";
 import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
 import { DocumentsSection } from "@/modules/documents/Documents";
+import { ContactsSection, NotesSection } from "./Contacts";
 
 // ---------------- customers ----------------
 function useCustomers() {
@@ -41,15 +42,20 @@ export function CustomerDetail() {
   const orders = useRows(c ? "v_orders" : null, { eq: { customer_id: c?.id }, order: [["po_date", "desc"]] }).rows;
   if (!c) return loading ? <Loading /> : <NotFound what="Customer" back={{ to: "/customers", label: "All customers" }} />;
   const cur = [c.eur, c.usd].filter(Boolean);
+  const last = orders.find(o => o.status !== "cancelled");
+  const lastPay = orders.map(o => o.last_payment_date).filter(Boolean).sort().pop();
   return <>
     <PageHeader back={{ to: "/customers", label: "Customers" }} title={c.name} sub={[c.country, c.contact_name, c.email].filter(Boolean).join(" · ") || undefined}>
       <LinkButton to={`/orders/new`} variant="outline"><Plus />New order</LinkButton>
       <LinkButton to={customerPath(c, "/edit")} variant="outline"><Pencil />Edit</LinkButton></PageHeader>
     <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
       {cur.map(x => <Stat key={x.currency} label={`Open ${x.currency}`} value={money(x.outstanding, x.currency)} tone={Number(x.overdue) > 0 ? "bad" : undefined} hint={Number(x.overdue) > 0 ? `${money(x.overdue, x.currency)} overdue` : `${x.open_orders} open order(s)`} />)}
-      {cur.map(x => <Stat key={"v" + x.currency} label={`Order value ${x.currency}`} value={money(x.order_value, x.currency)} hint={`margin ${money(x.margin, x.currency)}`} />)}
+      {!cur.length && <Stat label="Open" value="–" hint="no orders yet" />}
+      <Stat label="Last order" value={last ? <Link to={orderPath(last)} className="hover:text-indigo-600">{last.pi_number ? `PI ${last.pi_number}` : "draft"}</Link> : "–"} hint={last ? `${date(last.po_date)} · ${orders.length} order(s) in total` : undefined} />
+      <Stat label="Last payment" value={lastPay ? date(lastPay) : "–"} hint={lastPay ? "received" : "nothing received yet"} />
     </div>
-    <div className="mb-6 grid gap-6 lg:grid-cols-2">
+    <div className="mb-6 grid gap-6 lg:grid-cols-3">
+      <ContactsSection party="customer" p={c} />
       <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)]]} /></Section>
       <Section title="Details"><KV items={[["Address", c.address ? <span className="whitespace-pre-line">{c.address}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section>
     </div>
@@ -62,8 +68,9 @@ export function CustomerDetail() {
         { key: "payment_status", header: "Payment", render: o => <PaymentPill status={o.payment_status} /> }]} />
     </Section>
     <div className="mt-6 grid gap-6 lg:grid-cols-2">
-      <TasksSection eq={{ customer_id: c.id }} hide={["customer"]} newLink={newTaskPath({ customer: slug, back: customerPath(c) })} />
-      <DocumentsSection entity="customers" id={c.id} />
+      <NotesSection party="customer" p={c} />
+      <div className="space-y-6"><TasksSection eq={{ customer_id: c.id }} hide={["customer"]} newLink={newTaskPath({ customer: slug, back: customerPath(c) })} />
+        <DocumentsSection entity="customers" id={c.id} /></div>
     </div>
   </>;
 }
@@ -134,7 +141,10 @@ export function SupplierDetail() {
     <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
       {[s.eur, s.usd].filter(Boolean).map(x => <Stat key={x.currency} label={`Still to pay ${x.currency}`} value={money(x.outstanding, x.currency)} tone={Number(x.overdue) > 0 ? "bad" : undefined} />)}
     </div>
-    <Section title="Terms" className="mb-6"><KV items={[["EXW", sterms(s.exw)], ["FOB", sterms(s.fob)], ["Note", s.notes ?? "–"]]} /></Section>
+    <div className="mb-6 grid gap-6 lg:grid-cols-2">
+      <ContactsSection party="supplier" p={s} />
+      <Section title="Terms"><KV items={[["EXW", sterms(s.exw)], ["FOB", sterms(s.fob)], ["Address", s.address ? <span className="whitespace-pre-line">{s.address}</span> : "–"], ["Note", s.notes ?? "–"]]} /></Section>
+    </div>
     <Section title="Purchase orders">
       <DataTable rows={pos} rowTo={p => poPath(p)} empty="No purchase orders yet" cols={[
         { key: "po_number", header: "PO#", render: p => <span className="font-semibold text-gray-900">{p.po_number}</span> }, { key: "pi_numbers", header: "For PI" },
@@ -142,8 +152,9 @@ export function SupplierDetail() {
         { key: "outstanding", header: "Outstanding", align: "right", render: p => money(p.outstanding, p.currency) }]} />
     </Section>
     <div className="mt-6 grid gap-6 lg:grid-cols-2">
-      <TasksSection eq={{ supplier_id: s.id }} hide={["supplier"]} newLink={newTaskPath({ supplier: slug, back: supplierPath(s) })} />
-      <DocumentsSection entity="suppliers" id={s.id} />
+      <NotesSection party="supplier" p={s} />
+      <div className="space-y-6"><TasksSection eq={{ supplier_id: s.id }} hide={["supplier"]} newLink={newTaskPath({ supplier: slug, back: supplierPath(s) })} />
+        <DocumentsSection entity="suppliers" id={s.id} /></div>
     </div>
   </>;
 }
@@ -155,6 +166,7 @@ export function SupplierForm() {
   const cur = [{ value: "EUR", label: "EUR" }, { value: "USD", label: "USD" }];
   return <FormPage title={row ? `Edit ${row.name}` : "New supplier"} back={row ? { to: supplierPath(row), label: row.name } : { to: "/suppliers", label: "Suppliers" }}
     fields={[{ name: "name", label: "Supplier", required: true }, { name: "country", label: "Country", span: 1 }, { name: "contact_name", label: "Contact", span: 1 }, { name: "email", label: "E-mail" },
+      { name: "address", label: "Address (on the PO)", type: "textarea" },
       { name: "exw_currency", label: "EXW currency", type: "select", options: cur, span: 1, section: "Terms" }, { name: "exw_deposit", label: "EXW deposit %", type: "percent", span: 1, section: "Terms" },
       { name: "fob_currency", label: "FOB currency", type: "select", options: cur, span: 1, section: "Terms" }, { name: "fob_deposit", label: "FOB deposit %", type: "percent", span: 1, section: "Terms" },
       { name: "notes", label: "Note", type: "textarea", section: "Note" }]}

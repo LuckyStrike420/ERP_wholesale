@@ -48,8 +48,10 @@ export function ProductForm() {
       { name: `${k}_basis`, label: `${t} cost basis (${c})`, type: "number", span: 1, section: "Cost rules" }, { name: `${k}_share`, label: `${t} share above basis %`, type: "percent", span: 1, section: "Cost rules" },
       { name: `${k}_royalty`, label: `${t} royalty per piece (${c})`, type: "number", span: 1, section: "Cost rules" }] as Field[]; }),
     ...(row ? [{ name: "cost_valid_from", label: "A changed cost rule is valid from", type: "date", span: 1, section: "Cost rules", hint: "Earlier orders keep the old rule. Choose an earlier date only to correct the past: you see the effect first." } as Field] : []),
-    { name: "carton_dimensions", label: "Carton (L x W x H cm)", span: 1, section: "Packing" }, { name: "carton_weight_kg", label: "Carton weight (kg)", type: "number", span: 1, section: "Packing" },
-    { name: "units_per_carton", label: "Pieces per carton", type: "number", span: 1, section: "Packing" }, { name: "units_20ft", label: "Pieces 20ft", type: "number", span: 1, section: "Packing" },
+    { name: "units_per_carton", label: "Pieces per carton", type: "number", span: 1, section: "Packing", hint: "Used on packing lists: cartons, weights and CBM are worked out from these" },
+    { name: "carton_net_kg", label: "Net weight per carton (kg)", type: "number", span: 1, section: "Packing" }, { name: "carton_weight_kg", label: "Gross weight per carton (kg)", type: "number", span: 1, section: "Packing" },
+    { name: "carton_length_cm", label: "Carton length (cm)", type: "number", span: 1, section: "Packing" }, { name: "carton_width_cm", label: "Carton width (cm)", type: "number", span: 1, section: "Packing" },
+    { name: "carton_height_cm", label: "Carton height (cm)", type: "number", span: 1, section: "Packing" }, { name: "units_20ft", label: "Pieces 20ft", type: "number", span: 1, section: "Packing" },
     { name: "units_40ft", label: "Pieces 40ft", type: "number", span: 1, section: "Packing" }, { name: "units_40hc", label: "Pieces 40HC", type: "number", span: 1, section: "Packing" },
     { name: "notes", label: "Note", type: "textarea", section: "Note" }];
   return <FormPage title={row ? row.name : "New product"} back={{ to: "/products", label: "Products" }} fields={fields}

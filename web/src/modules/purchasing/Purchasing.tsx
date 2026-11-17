@@ -1,7 +1,7 @@
 /**
  * Purchasing module: /purchasing, /purchasing/new, /purchasing/2774, /purchasing/2774/edit|payment|invoice|write-off
  */
-import { Pencil, Plus, Receipt } from "lucide-react";
+import { FileText, Pencil, Plus, Receipt } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
 import { Link, useParams } from "@/app/router";
 import { orderPath, poPath, supplierPath } from "@/app/paths";
@@ -76,6 +76,7 @@ export function PurchaseOrderDetail() {
       sub={<>{supplier ? <Link to={supplierPath(supplier)} className="text-gray-700 hover:text-indigo-600">{p.supplier_name}</Link> : p.supplier_name} · {p.order_type} · {cur}{p.pi_numbers ? ` · for PI ${p.pi_numbers}` : ""}</>}>
       <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>
       <LinkButton variant="outline" to={`${base}/invoice`}>{inv ? "Edit supplier invoice" : "Supplier invoice received"}</LinkButton>
+      <LinkButton variant="outline" to={`${base}/pdf`}><FileText />PO (PDF)</LinkButton>
       <LinkButton variant="outline" to={`${base}/edit`}><Pencil />Edit</LinkButton>
     </PageHeader>
     <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">

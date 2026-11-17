@@ -1,5 +1,6 @@
 /**
- * /orders/:ref/pi: the proforma invoice as an A4 document. "Download PDF" opens the browser's print dialog
+ * /orders/:ref/pi: the proforma invoice as an A4 document; /orders/:ref/commercial-invoice: the same layout as the
+ * commercial invoice (invoice number and date, received so far and the balance still due). "Download PDF" opens the browser's print dialog
  * (choose "Save as PDF"); only the document is printed, not the app around it.
  * Company details come from Admin → Settings (company_*); nothing is invented when they are empty.
  */
@@ -9,14 +10,18 @@ import { useRows } from "@/app/store";
 import { Link, useParams } from "@/app/router";
 import { orderPath } from "@/app/paths";
 import { Loading, NotFound, Notice } from "@/app/ui";
-import { date, money, pct, qty } from "@/app/format";
+import { date, money, pct, qty, termWhen } from "@/app/format";
 import { useOrder } from "./data";
 
 /** unit prices keep the decimals they were agreed with: $0.98, $0.845, $8.25 */
 const unitPrice = (v: any, cur: string) => `${cur === "USD" ? "$" : "€"}${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
-export default function ProformaInvoice() {
+export default function ProformaInvoice() { return <SalesDocument kind="pi" />; }
+export function CommercialInvoice() { return <SalesDocument kind="invoice" />; }
+
+function SalesDocument({ kind }: { kind: "pi" | "invoice" }) {
   const { ref } = useParams(); const { o, loading } = useOrder(ref);
+  const terms = useRows("payment_terms").rows;
   const id = o?.id ?? null;
   const lines = useRows(id && "v_order_lines", { eq: { sales_order_id: id }, order: [["line_no", "asc"]] });
   const products = useRows("products").rows; const customers = useRows("customers").rows;
@@ -29,7 +34,11 @@ export default function ProformaInvoice() {
   const prod = Object.fromEntries(products.map(p => [p.id, p]));
   const ship = ships.find(s => links.some(l => l.shipment_id === s.id));
   const cur = o.currency; const missing = ["company_name", "company_address", "company_bank"].filter(k => !set(k));
-  const balanceWhen = o.order_type === "FOB" ? "before shipment / 10 days before ETA" : o.payment_days ? `${o.payment_days} days after invoice` : "before pick-up";
+  const term = terms.find(t => t.id === o.payment_term_id);
+  const balanceWhen = term ? termWhen(term.balance_anchor, term.balance_days) : o.order_type === "FOB" ? "before shipment / 10 days before ETA" : o.payment_days ? `${o.payment_days} days after invoice` : "before pick-up";
+  const depositWhen = term ? termWhen(term.deposit_anchor, term.deposit_days) : "on confirmation";
+  const inv = kind === "invoice";
+  if (inv && !o.invoice_number) return <Notice tone="amber">No invoice is registered on PI {o.pi_number} yet. <Link to={orderPath(o, "/invoice")} className="font-medium underline">Register the invoice</Link> first.</Notice>;
   const shownLines = lines.rows.filter(l => Number(l.qty) > 0);
 
   return <>
@@ -46,10 +55,11 @@ export default function ProformaInvoice() {
           <div className="mt-1 whitespace-pre-line text-gray-500">{[set("company_contact"), set("company_vat")].filter(Boolean).join("\n")}</div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-semibold tracking-tight text-gray-900">PROFORMA INVOICE</div>
+          <div className="text-2xl font-semibold tracking-tight text-gray-900">{inv ? "COMMERCIAL INVOICE" : "PROFORMA INVOICE"}</div>
           <dl className="mt-3 grid grid-cols-[auto_auto] justify-end gap-x-4 gap-y-0.5 text-gray-600">
-            <dt>PI number</dt><dd className="font-semibold text-gray-900">{o.pi_number}</dd>
-            <dt>Date</dt><dd>{date(o.pi_date ?? o.po_date)}</dd>
+            {inv && <><dt>Invoice number</dt><dd className="font-semibold text-gray-900">{o.invoice_number}</dd></>}
+            <dt>PI number</dt><dd className={inv ? "" : "font-semibold text-gray-900"}>{o.pi_number}</dd>
+            <dt>Date</dt><dd>{date(inv ? o.invoice_date : o.pi_date ?? o.po_date)}</dd>
             {o.customer_po && <><dt>Your PO</dt><dd>{o.customer_po}</dd></>}
             <dt>Terms</dt><dd>{o.order_type}{o.order_type === "FOB" && ship?.port_loading ? ` ${ship.port_loading}` : ""}</dd>
             <dt>Currency</dt><dd>{cur}</dd>
@@ -93,15 +103,24 @@ export default function ProformaInvoice() {
           {adjustments.map(a => <div key={a.id} className="contents"><dt className="text-gray-500">{a.reason}</dt><dd className="text-right tabular-nums">{money(a.amount, cur)}</dd></div>)}
           <div className="col-span-2 my-1 border-t border-gray-300" />
           <dt className="font-semibold text-gray-900">Total {cur}</dt><dd className="text-right text-base font-semibold tabular-nums text-gray-900">{money(o.total_receivable, cur)}</dd>
+          {inv && Number(o.paid) > 0 && <><dt className="text-gray-500">Received</dt><dd className="text-right tabular-nums">−{money(o.paid, cur)}</dd></>}
+          {inv && Number(o.written_off) !== 0 && <><dt className="text-gray-500">Settled</dt><dd className="text-right tabular-nums">−{money(o.written_off, cur)}</dd></>}
+          {inv && <><div className="col-span-2 my-1 border-t border-gray-300" /><dt className="font-semibold text-gray-900">Balance due</dt><dd className="text-right text-base font-semibold tabular-nums text-gray-900">{money(Math.max(Number(o.outstanding), 0), cur)}</dd></>}
         </dl>
       </section>
 
       <section className="mt-8 grid grid-cols-2 gap-8 border-t border-gray-200 pt-6">
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Payment</div>
-          {Number(o.deposit_pct) > 0 && <div>Deposit {pct(o.deposit_pct, 0)}: <b className="tabular-nums">{money(o.deposit_due, cur)}</b>{o.deposit_due_date ? `, due ${date(o.deposit_due_date)}` : ", on confirmation"}</div>}
-          {Number(o.balance_due) > 0 && <div>Balance: <b className="tabular-nums">{money(o.balance_due, cur)}</b>{o.balance_due_date ? `, due ${date(o.balance_due_date)}` : `, ${balanceWhen}`}</div>}
-          <div className="mt-1 text-gray-500">Please state PI {o.pi_number} with your payment.</div>
+          {inv ? <>
+            {Number(o.outstanding) > 0.01 ? <div>Please pay <b className="tabular-nums">{money(o.outstanding, cur)}</b>{o.balance_due_date ? ` by ${date(o.balance_due_date)}` : o.deposit_due_date && Number(o.deposit_outstanding) > 0.01 ? ` by ${date(o.deposit_due_date)}` : ""}.</div>
+              : <div>Paid in full. Thank you.</div>}
+            <div className="mt-1 text-gray-500">Please state invoice {o.invoice_number} with your payment.</div>
+          </> : <>
+            {Number(o.deposit_pct) > 0 && <div>{Number(o.deposit_pct) >= 1 ? "Payment" : `Deposit ${pct(o.deposit_pct, 0)}`}: <b className="tabular-nums">{money(o.deposit_due, cur)}</b>{o.deposit_due_date ? `, due ${date(o.deposit_due_date)}` : `, ${depositWhen}`}</div>}
+            {Number(o.balance_due) > 0 && <div>Balance: <b className="tabular-nums">{money(o.balance_due, cur)}</b>{o.balance_due_date ? `, due ${date(o.balance_due_date)}` : `, ${balanceWhen}`}</div>}
+            <div className="mt-1 text-gray-500">Please state PI {o.pi_number} with your payment.</div>
+          </>}
         </div>
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Bank details</div>
