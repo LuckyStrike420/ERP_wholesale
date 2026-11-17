@@ -41,12 +41,19 @@ export const useLoading = () => useSyncExternalStore(cb => { listeners.add(cb); 
  * and the last known rows are shown at once (also when you come back to a page) while fresh rows load.
  */
 const cache = new Map<string, { version: number; rows: any[]; promise?: Promise<any[]> }>();
+// at most a few queries at the same time: the small database server answers 4 quickly rather than 15 slowly (and timing out)
+const MAX_PARALLEL = 4; let running = 0; const waiting: (() => void)[] = [];
+async function limited<T>(job: () => Promise<T>): Promise<T> {
+  if (running >= MAX_PARALLEL) await new Promise<void>(r => waiting.push(r));
+  running++;
+  try { return await job(); } finally { running--; waiting.shift()?.(); }
+}
 function fetchShared<T>(db: DataClient, key: string, from: string, opts: SelectOpts, version: number): Promise<T[]> {
   const hit = cache.get(key);
   if (hit && hit.version === version) return hit.promise ?? Promise.resolve(hit.rows);
   const entry = { version, rows: hit?.rows ?? [], promise: undefined as Promise<any[]> | undefined };
   setPending(1);
-  entry.promise = db.select<T>(from, opts)
+  entry.promise = limited(() => db.select<T>(from, opts))
     .then(rows => { entry.rows = rows; entry.promise = undefined; return rows; })
     .catch(e => { cache.delete(key); throw e; })
     .finally(() => setPending(-1));
