@@ -80,11 +80,11 @@ function ChaseList() {
 const SEV: Record<string, number> = { error: 0, warning: 1, info: 2 };
 function Attention() {
   const attention = useRows("v_attention").rows; const counts = useRows("v_attention_counts").rows[0];
-  const orders = useRows("v_orders").rows; const lines = useRows("v_order_lines").rows; const pos = useRows("v_purchase_orders").rows; const ships = useRows("v_shipments").rows;
-  const byId = useMemo(() => ({ o: Object.fromEntries(orders.map(o => [o.id, o])), l: Object.fromEntries(lines.map(l => [l.id, l.sales_order_id])), p: Object.fromEntries(pos.map(p => [p.id, p])), s: Object.fromEntries(ships.map(s => [s.id, s])) }), [orders, lines, pos, ships]);
+  const orders = useRows("v_orders").rows; const pos = useRows("v_purchase_orders").rows; const ships = useRows("v_shipments").rows;
+  const byId = useMemo(() => ({ o: Object.fromEntries(orders.map(o => [o.id, o])), pi: Object.fromEntries(orders.filter(o => o.pi_number).map(o => [o.pi_number, o])), p: Object.fromEntries(pos.map(p => [p.id, p])), s: Object.fromEntries(ships.map(s => [s.id, s])) }), [orders, pos, ships]);
   const to = (a: any): string => {
     if (a.entity === "sales_orders" && byId.o[a.entity_id]) return orderPath(byId.o[a.entity_id]);
-    if (a.entity === "sales_order_lines" && byId.o[byId.l[a.entity_id]]) return orderPath(byId.o[byId.l[a.entity_id]]);
+    if (a.entity === "sales_order_lines") return byId.pi[a.reference] ? orderPath(byId.pi[a.reference]) : "/orders?status=draft";
     if (a.entity === "purchase_orders" && byId.p[a.entity_id]) return poPath(byId.p[a.entity_id]);
     if (a.entity === "shipments" && byId.s[a.entity_id]) return shipmentPath(byId.s[a.entity_id], "/edit");
     return "/stock";

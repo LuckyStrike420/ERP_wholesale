@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { toast } from "sonner";
 import type { DataClient, Row, SelectOpts } from "@/data/client";
 
@@ -36,22 +36,45 @@ let pending = 0; const listeners = new Set<() => void>();
 const setPending = (d: number) => { pending += d; listeners.forEach(l => l()); };
 export const useLoading = () => useSyncExternalStore(cb => { listeners.add(cb); return () => { listeners.delete(cb); }; }, () => pending > 0);
 
-/** rows of a table or view; reloads after every change made through run() */
+/**
+ * Shared cache: every table/view query is fetched once per data version, however many components ask for it,
+ * and the last known rows are shown at once (also when you come back to a page) while fresh rows load.
+ */
+const cache = new Map<string, { version: number; rows: any[]; promise?: Promise<any[]> }>();
+function fetchShared<T>(db: DataClient, key: string, from: string, opts: SelectOpts, version: number): Promise<T[]> {
+  const hit = cache.get(key);
+  if (hit && hit.version === version) return hit.promise ?? Promise.resolve(hit.rows);
+  const entry = { version, rows: hit?.rows ?? [], promise: undefined as Promise<any[]> | undefined };
+  setPending(1);
+  entry.promise = db.select<T>(from, opts)
+    .then(rows => { entry.rows = rows; entry.promise = undefined; return rows; })
+    .catch(e => { cache.delete(key); throw e; })
+    .finally(() => setPending(-1));
+  cache.set(key, entry);
+  return entry.promise as Promise<T[]>;
+}
+
+/** rows of a table or view; reloads after every change made through run() or a form */
 export function useRows<T = any>(from: string | null, opts: SelectOpts = {}): { rows: T[]; loading: boolean } {
   const { db, version } = useApp();
-  const [state, setState] = useState<{ rows: T[]; loading: boolean }>({ rows: [], loading: true });
   const key = JSON.stringify([from, opts]);
-  const seq = useRef(0);
+  const [state, setState] = useState<{ key: string; rows: T[]; loading: boolean }>(() => {
+    const hit = from ? cache.get(key) : undefined;
+    return { key, rows: (hit?.rows ?? []) as T[], loading: !!from && !hit };
+  });
   useEffect(() => {
-    if (!from) { setState({ rows: [], loading: false }); return; }
-    const n = ++seq.current;
-    setPending(1);
-    db.select<T>(from, opts).then(rows => { if (n === seq.current) setState({ rows, loading: false }); })
-      .catch(e => { toast.error(errorText(e)); if (n === seq.current) setState({ rows: [], loading: false }); })
-      .finally(() => setPending(-1));
+    if (!from) { setState({ key, rows: [], loading: false }); return; }
+    let live = true;
+    const hit = cache.get(key);
+    if (hit && state.key !== key) setState({ key, rows: hit.rows as T[], loading: false });   // show what we already know
+    fetchShared<T>(db, key, from, opts, version)
+      .then(rows => { if (live) setState({ key, rows, loading: false }); })
+      .catch(e => { if (live) { toast.error(errorText(e)); setState({ key, rows: [], loading: false }); } });
+    return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, key, version]);
-  return state;
+  // a changed query (other order, other filter) never shows the rows of the previous one
+  return state.key === key ? state : { rows: ((from && cache.get(key)?.rows) ?? []) as T[], loading: !!from && !cache.get(key) };
 }
 export function useRow<T = any>(from: string, eq: Row): T | undefined { return useRows<T>(from, { eq }).rows[0]; }
 
