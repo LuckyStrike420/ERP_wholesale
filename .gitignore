@@ -4,7 +4,7 @@ node_modules/
 
 # business data, regenerate with scripts/build-seed.ts
 web/public/seed.json
-reports/
+/reports/
 .env
 .env.local
 web/.env
