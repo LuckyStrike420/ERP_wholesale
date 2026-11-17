@@ -14,6 +14,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0008_cost_history_and_settings.sql` | `0008_cost_history_and_settings` | ja (11 nov 2026) |
 | `0009_open_items.sql` | `0009_open_items` (plus `v_open_items_totals`, los toegepast met dezelfde SQL) | ja (17 nov 2026) |
 | `0010_faster_attention.sql` | `0010_faster_attention` | ja (17 nov 2026) |
+| `0011_po_from_order.sql` | `0011_po_from_order` | ja (17 nov 2026) |
 
 ## Regels
 

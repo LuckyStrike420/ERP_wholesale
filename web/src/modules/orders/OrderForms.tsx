@@ -167,3 +167,51 @@ export function OrderWriteOff() {
       await db.insert("write_offs", { ...v, sales_order_id: o.id });
     }} />}</WithOrder>;
 }
+
+/** /orders/:ref/purchase-order: create the PO to the supplier for lines that have none yet */
+export function OrderPurchaseOrder() {
+  return <WithOrder>{o => <OrderPOForm o={o} />}</WithOrder>;
+}
+function OrderPOForm({ o }: { o: any }) {
+  const { db } = useApp();
+  const lines = useRows("v_order_lines", { eq: { sales_order_id: o.id }, order: [["line_no", "asc"]] });
+  const productsQ = useRows("products"); const suppliersQ = useRows("suppliers", { order: [["name", "asc"]] });
+  const termsQ = useRows("supplier_terms"); const posQ = useRows("purchase_orders");
+  // the form starts with suggestions, so it waits until everything it suggests from is loaded
+  if ([lines, productsQ, suppliersQ, termsQ, posQ].some(q => q.loading)) return <Loading />;
+  const products = productsQ.rows, suppliers = suppliersQ.rows, terms = termsQ.rows, pos = posQ.rows;
+  const open = lines.rows.filter(l => !l.purchase_order_id && Number(l.qty) > 0);
+  if (!open.length) return <NotFound what="An order line without a PO" back={backTo(o)} />;
+  const prod = Object.fromEntries(products.map(p => [p.id, p]));
+  // suggestions only: the supplier of most products on these lines, and the next free numeric PO#
+  const counts: Record<string, number> = {};
+  for (const l of open) { const s = prod[l.product_id]?.default_supplier_id; if (s) counts[s] = (counts[s] ?? 0) + 1; }
+  const supplier = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+  const nums = pos.map(p => Number(p.po_number)).filter(n => Number.isInteger(n));
+  const next = nums.length ? String(Math.max(...nums) + 1) : "";
+  const cur = o.currency;
+  const fields: Field[] = [
+    { name: "po_number", label: "Our PO#", required: true, span: 1, hint: next ? `Suggested: the next free number after ${Math.max(...nums)}` : undefined },
+    { name: "po_date", label: "PO date", type: "date", span: 1 },
+    { name: "supplier_id", label: "Supplier", type: "select", required: true, options: suppliers.map(s => {
+        const t = terms.find(x => x.supplier_id === s.id && x.order_type === o.order_type);
+        return { value: s.id, label: `${s.name}${t ? ` · ${t.currency}, ${Math.round(Number(t.deposit_pct) * 100)}% deposit` : ""}` }; }),
+      hint: `The PO is ${o.order_type}. Currency and deposit come from the supplier's ${o.order_type} terms; without terms the PO is in ${cur} with no deposit.` },
+    ...open.map(l => ({ name: `line_${l.id}`, type: "checkbox" as const, section: "Order lines on this PO",
+      label: `Line ${l.line_no} · ${prod[l.product_id]?.name ?? ""} · ${Number(l.qty).toLocaleString("en-US")} pcs · purchase value ${l.unit_cost == null ? "unknown (no cost price)" : money(l.purchase_value, cur)}` })),
+    { name: "notes", label: "Note", type: "textarea", section: "Note" },
+  ];
+  return <FormPage title="Create PO to the supplier" back={backTo(o)} submitLabel="Create PO and link lines" aside={<OrderAside o={o} />}
+    sub={`For ${o.pi_number ? `PI ${o.pi_number}` : "this draft order"}. The PO's expected amount follows from the purchase value of the linked lines.`}
+    fields={fields} initial={{ po_number: next, po_date: today(), supplier_id: supplier, ...Object.fromEntries(open.map(l => [`line_${l.id}`, true])) }}
+    onSubmit={async v => {
+      const chosen = open.filter(l => v[`line_${l.id}`]).map(l => l.id);
+      if (!chosen.length) throw new Error("Choose at least one order line for this PO");
+      const t = terms.find(x => x.supplier_id === v.supplier_id && x.order_type === o.order_type);
+      const go = async () => { const no = await db.rpc<string>("create_po_for_order", { p_order: o.id, p_po_number: v.po_number, p_supplier: v.supplier_id, p_po_date: v.po_date, p_lines: chosen, p_notes: v.notes });
+        return `/purchasing/${encodeURIComponent(no)}`; };
+      if (t && t.currency !== cur) return { confirm: { title: "Different currency", label: "Create the PO anyway", go,
+        body: <>This supplier invoices {o.order_type} in <b>{t.currency}</b>, the order is in <b>{cur}</b>. The lines then do not count towards the PO's expected amount; you enter the supplier's invoice amount yourself.</> } };
+      return go();
+    }} />;
+}

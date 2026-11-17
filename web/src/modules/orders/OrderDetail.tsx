@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Ban, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
+import { AlertTriangle, Ban, ClipboardList, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApp, useRows } from "@/app/store";
 import { Link, useParams } from "@/app/router";
@@ -37,6 +37,8 @@ export default function OrderDetail() {
   const shipment = shipments.find(s => shipLinks.some(l => l.shipment_id === s.id));
   const customer = customers.find(c => c.id === o.customer_id);
   const late = Number(o.overdue_amount) > 0;
+  const withoutPo = lines.filter(l => !l.purchase_order_id && Number(l.qty) > 0);
+  const poButton = !locked && withoutPo.length > 0 && <LinkButton size="sm" to={`${base}/purchase-order`}><ClipboardList />Create PO{withoutPo.length < lines.length ? ` (${withoutPo.length} line${withoutPo.length === 1 ? "" : "s"})` : ""}</LinkButton>;
 
   return <>
     <PageHeader back={{ to: "/orders", label: "Orders" }}
@@ -62,7 +64,8 @@ export default function OrderDetail() {
 
     {mine.length > 0 && <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
       <div className="mb-2 flex items-center text-sm font-semibold text-amber-900"><AlertTriangle className="mr-1.5 h-4 w-4" />Next actions</div>
-      <ul className="space-y-1.5 text-sm text-amber-950">{mine.map((a, i) => <li key={i} className="flex items-center gap-2"><SeverityPill s={a.severity} />{a.message}</li>)}</ul></div>}
+      <ul className="space-y-1.5 text-sm text-amber-950">{mine.map((a, i) => <li key={i} className="flex items-center gap-2"><SeverityPill s={a.severity} />{a.message}
+        {a.code === "stock_sale_without_po" && !locked && <Link to={`${base}/purchase-order`} className="ml-1 font-medium text-indigo-600 hover:underline">Create PO</Link>}</li>)}</ul></div>}
 
     <div className="mb-6 grid gap-6 lg:grid-cols-2">
       <Section title="Payment schedule" action={!locked && <Link to={`${base}/edit`} className="text-xs font-medium text-indigo-600 hover:underline">Set due dates</Link>}>
@@ -84,7 +87,7 @@ export default function OrderDetail() {
       </Section>
     </div>
 
-    <Section title="Order lines" className="mb-6" action={!locked && <LinkButton size="sm" variant="outline" to={`${base}/lines/new`}><Plus />Add line</LinkButton>}>
+    <Section title="Order lines" className="mb-6" action={!locked && <span className="flex gap-2">{poButton}<LinkButton size="sm" variant="outline" to={`${base}/lines/new`}><Plus />Add line</LinkButton></span>}>
       <DataTable rows={lines} empty="No lines yet. Add the first product." exportName={`order-${o.pi_number ?? "draft"}-lines`}
         rowTo={locked ? undefined : l => `${base}/lines/${l.line_no}`}
         cols={[
@@ -96,7 +99,8 @@ export default function OrderDetail() {
               : <div>{money(l.unit_cost, cur, 3)}<div className="text-xs text-gray-500">{SOURCE_LABEL[l.cost_source]}{l.cost_is_final ? " · final" : ""} · <Link to={`${base}/lines/${l.line_no}/cost`} className="underline hover:text-gray-900">why?</Link></div></div> },
           { key: "revenue", header: "Revenue", align: "right", render: l => money(l.revenue, cur) },
           { key: "margin", header: "Margin", align: "right", render: l => <span className={Number(l.margin) < 0 ? "font-semibold text-rose-600" : ""}>{money(l.margin, cur)}<div className="text-xs text-gray-500">{marginPct(l.margin_pct, l.cost_known === false ? 1 : 0)}</div></span> },
-          { key: "po", header: "Our PO", value: l => po[l.purchase_order_id]?.po_number, render: l => po[l.purchase_order_id] ? <Link to={poPath(po[l.purchase_order_id])} className="text-indigo-600 hover:underline">{po[l.purchase_order_id].po_number}</Link> : "–" },
+          { key: "po", header: "Our PO", value: l => po[l.purchase_order_id]?.po_number, render: l => po[l.purchase_order_id] ? <Link to={poPath(po[l.purchase_order_id])} className="text-indigo-600 hover:underline">{po[l.purchase_order_id].po_number}</Link>
+              : !locked && Number(l.qty) > 0 ? <Link to={`${base}/purchase-order`} className="text-xs font-medium text-amber-700 hover:underline">no PO · create</Link> : "–" },
           { key: "batch", header: "Batch", value: l => batchNo[l.batch_item_id], render: l => batchNo[l.batch_item_id] ?? "–" },
           { key: "act", header: "", width: "3rem", render: l => locked ? null : <Button size="icon" variant="ghost" aria-label={`Remove line ${l.line_no}`} className="h-7 w-7 text-gray-400 hover:text-rose-600"
               onClick={e => { e.stopPropagation(); setConfirm({ title: "Remove this line?", label: "Remove line", body: `${pName[l.product_id]}, ${qty(l.quantity)} pieces. To keep the history, set "quantity cancelled" on the line instead.`,

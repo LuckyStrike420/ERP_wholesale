@@ -6,7 +6,7 @@ import type { ComponentType } from "react";
 import Dashboard from "@/modules/dashboard/Dashboard";
 import OrdersList from "@/modules/orders/OrdersList";
 import OrderDetail from "@/modules/orders/OrderDetail";
-import { LineCost, OrderCorrection, OrderEdit, OrderInvoice, OrderLine, OrderNew, OrderPayment, OrderWriteOff } from "@/modules/orders/OrderForms";
+import { LineCost, OrderPurchaseOrder, OrderCorrection, OrderEdit, OrderInvoice, OrderLine, OrderNew, OrderPayment, OrderWriteOff } from "@/modules/orders/OrderForms";
 import { Ledger, ToPay, ToReceive, VoidPayment } from "@/modules/payments/Payments";
 import { PurchaseOrderDetail, PurchaseOrderEdit, PurchaseOrderInvoice, PurchaseOrderNew, PurchaseOrderPayment, PurchaseOrderWriteOff, PurchaseOrders } from "@/modules/purchasing/Purchasing";
 import { CustomerDetail, CustomerForm, Customers, SupplierDetail, SupplierForm, Suppliers } from "@/modules/parties/Parties";
@@ -24,7 +24,7 @@ export const ROUTES: Route[] = [
   r("/orders/:ref", "orders", OrderDetail), r("/orders/:ref/edit", "orders", OrderEdit),
   r("/orders/:ref/lines/:line", "orders", OrderLine), r("/orders/:ref/lines/:line/cost", "orders", LineCost),
   r("/orders/:ref/payment", "orders", OrderPayment), r("/orders/:ref/invoice", "orders", OrderInvoice),
-  r("/orders/:ref/correction", "orders", OrderCorrection), r("/orders/:ref/write-off", "orders", OrderWriteOff),
+  r("/orders/:ref/correction", "orders", OrderCorrection), r("/orders/:ref/purchase-order", "orders", OrderPurchaseOrder), r("/orders/:ref/write-off", "orders", OrderWriteOff),
   r("/payments", "payments", ToReceive), r("/payments/suppliers", "payments", ToPay), r("/payments/ledger", "payments", Ledger),
   r("/payments/:id/void", "payments", VoidPayment),
   r("/purchasing", "purchasing", PurchaseOrders), r("/purchasing/new", "purchasing", PurchaseOrderNew),
