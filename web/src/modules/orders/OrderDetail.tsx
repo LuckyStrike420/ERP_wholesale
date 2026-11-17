@@ -8,6 +8,8 @@ import { ConfirmDialog, DataTable, KV, LinkButton, Loading, NotFound, PageHeader
 import { date, money, marginPct, pct, qty, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER, SHIP_LABEL, termWhen } from "@/app/format";
 import { useOrder } from "./data";
 import { OrderTimeline } from "./Timeline";
+import { OrderPath } from "./OrderPath";
+import { FavoriteStar, useRecord } from "@/app/Favorites";
 import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
 import { DocumentsSection } from "@/modules/documents/Documents";
 import { ShippingDocumentsSection } from "@/modules/documents/ShippingDocument";
@@ -34,6 +36,8 @@ export default function OrderDetail() {
   const po = useMemo(() => Object.fromEntries(pos.map(p => [p.id, p])), [pos]);
   const batchNo = useMemo(() => Object.fromEntries(stock.map(s => [s.batch_item_id, s.batch_number])), [stock]);
 
+  const rec = o ? { type: "order" as const, id: o.id, label: o.pi_number ? `PI ${o.pi_number}` : "Draft order", path: orderPath(o), sub: o.customer_name } : null;
+  useRecord(rec);
   if (!o) return loading ? <Loading what="Loading order…" /> : <NotFound what={`Order ${ref}`} back={{ to: "/orders", label: "All orders" }} />;
   const cur = o.currency; const locked = ["completed", "cancelled"].includes(o.status);
   const base = orderPath(o);
@@ -53,10 +57,8 @@ export default function OrderDetail() {
 
   return <>
     <PageHeader back={{ to: "/orders", label: "Orders" }}
-      title={<span className="flex flex-wrap items-center gap-3">{o.pi_number ? `PI ${o.pi_number}` : "Draft order"}<StatusPill status={o.status} /><PaymentPill status={o.payment_status} /></span>}
+      title={<span className="flex flex-wrap items-center gap-3">{o.pi_number ? `PI ${o.pi_number}` : "Draft order"}<StatusPill status={o.status} /><PaymentPill status={o.payment_status} />{rec && <FavoriteStar r={rec} />}</span>}
       sub={<>{customer ? <Link to={customerPath(customer)} className="text-gray-700 hover:text-indigo-600">{o.customer_name}</Link> : o.customer_name} · {o.order_type} · {cur}{o.customer_po ? ` · customer PO ${o.customer_po}` : ""}</>}>
-      {!locked && <select aria-label="Order status" className={selectClass + " w-52"} value={o.status} onChange={e => run(() => db.update("sales_orders", { id: o.id }, { status: e.target.value }), "Status updated")}>
-        {STATUS_ORDER.filter(s => s !== "draft" || o.status === "draft").map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select>}
       {!["draft", "cancelled"].includes(o.status) && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
       <LinkButton to={`${base}/edit`} variant="outline"><Pencil />Edit</LinkButton>
       {o.pi_number && <LinkButton to={`${base}/pi`} variant="outline"><FileText />PI (PDF)</LinkButton>}
@@ -66,6 +68,8 @@ export default function OrderDetail() {
         body: "The order leaves revenue and open amounts. Payments already received stay visible as customer credit. This cannot be undone.",
         go: () => run(() => db.update("sales_orders", { id: o.id }, { status: "cancelled" }), "Order cancelled") })}><Ban className="h-4 w-4" />Cancel order</Button>}
     </PageHeader>
+
+    <OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
 
     <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Stat label="Total to receive" value={money(o.total_receivable, cur)} hint={Number(o.adjustments) ? `incl. corrections ${money(o.adjustments, cur)}` : `${o.line_count} line${o.line_count === 1 ? "" : "s"}`} />

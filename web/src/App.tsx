@@ -10,6 +10,8 @@ import { NotFound } from "@/app/ui";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/routes";
 import { CommandPalette, shortcutLabel, showCommandPalette } from "@/app/CommandPalette";
+import { SidebarRecords } from "@/app/Favorites";
+import { NotificationBell } from "@/app/Notifications";
 
 const NAV: { group: string; items: { to: string; section: string; label: string; icon: any }[] }[] = [
   { group: "", items: [{ to: "/", section: "dashboard", label: "Overview", icon: LayoutDashboard }, { to: "/payments", section: "payments", label: "Payments", icon: Receipt }, { to: "/tasks", section: "tasks", label: "Tasks", icon: CheckSquare }] },
@@ -48,10 +50,12 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
             {i.section === "payments" && badge > 0 && <span title={`${overdue} overdue, ${reminders} EXW reminder(s)`} className="rounded-full bg-rose-100 px-1.5 text-[11px] font-semibold tabular-nums text-rose-700">{badge}</span>}
           </Link>; })}
       </div>))}
+    <SidebarRecords />
   </nav>;
   const brand = <div className="flex items-center gap-2.5 px-5 py-4">
     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white">YP</div>
-    <div><div className="text-sm font-semibold leading-tight text-gray-900">Your Products</div><div className="text-[11px] leading-tight text-gray-500">Orders & payments</div></div>
+    <div className="min-w-0 flex-1"><div className="text-sm font-semibold leading-tight text-gray-900">Your Products</div><div className="text-[11px] leading-tight text-gray-500">Orders & payments</div></div>
+    <NotificationBell className="hidden lg:block" />
   </div>;
   const search = <div className="px-3 pt-1">
     <button type="button" onClick={showCommandPalette} className="flex w-full items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700">
@@ -73,6 +77,7 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
           <Button variant="ghost" size="icon" onClick={() => setOpen(o => !o)} aria-label="Menu">{open ? <X /> : <Menu />}</Button>
           <span className="text-sm font-semibold">Your Products</span>
           <Button variant="ghost" size="icon" className="ml-auto" onClick={showCommandPalette} aria-label="Search"><Search /></Button>
+          <NotificationBell />
           <Link to="/orders/new" className="inline-flex h-8 items-center gap-1 rounded-md bg-indigo-600 px-3 text-xs font-medium text-white"><Plus className="h-3.5 w-3.5" />Order</Link>
         </header>
         <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8 print:p-0"><div className="mx-auto max-w-[1400px]">
@@ -110,5 +115,5 @@ export default function App() {
   if (!session) return <SignIn db={db} onDone={reload} />;
   if (!session.role) return <div className="p-10 text-sm">You are signed in as {session.email}, but no role has been assigned to this account yet. Ask the admin to give your account a role under Admin → Users.
     <Button variant="outline" size="sm" className="ml-3" onClick={async () => { await db.signOut?.(); reload(); }}>Sign out</Button></div>;
-  return <RouterProvider><AppProvider db={db}><Shell db={db} session={session} onSignOut={async () => { await db.signOut?.(); reload(); }} /><Toaster position="bottom-right" richColors /></AppProvider></RouterProvider>;
+  return <RouterProvider><AppProvider db={db} session={session}><Shell db={db} session={session} onSignOut={async () => { await db.signOut?.(); reload(); }} /><Toaster position="bottom-right" richColors /></AppProvider></RouterProvider>;
 }

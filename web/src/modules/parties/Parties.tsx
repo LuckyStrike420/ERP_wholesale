@@ -10,6 +10,14 @@ import { date, money, pct, termText } from "@/app/format";
 import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
 import { DocumentsSection } from "@/modules/documents/Documents";
 import { ContactsSection, NotesSection } from "./Contacts";
+import { FavoriteStar, useRecord } from "@/app/Favorites";
+import { findSimilar } from "@/app/duplicates";
+import type { ReactNode } from "react";
+
+/** "a similar customer already exists" with links, shown on the form before a new one is saved */
+export const similarWarning = (kind: string, sims: { name: string }[], pathOf: (x: { name: string }) => string, go: () => Promise<any>) => ({ confirm: {
+  title: `A ${kind} with a similar name already exists`, label: `Create new ${kind} anyway`, go,
+  body: <div>Check that it is not the same {kind}:<ul className="mt-1 list-disc pl-5">{sims.map(x => <li key={x.name}><Link to={pathOf(x)} className="font-medium underline">{x.name}</Link></li>)}</ul></div> as ReactNode } });
 
 // ---------------- customers ----------------
 function useCustomers() {
@@ -40,12 +48,14 @@ export function CustomerDetail() {
   const { slug } = useParams(); const { rows, loading } = useCustomers();
   const c = bySlug(rows, slug);
   const orders = useRows(c ? "v_orders" : null, { eq: { customer_id: c?.id }, order: [["po_date", "desc"]] }).rows;
+  const rec = c ? { type: "customer" as const, id: c.id, label: c.name, path: customerPath(c), sub: c.country ?? undefined } : null;
+  useRecord(rec);
   if (!c) return loading ? <Loading /> : <NotFound what="Customer" back={{ to: "/customers", label: "All customers" }} />;
   const cur = [c.eur, c.usd].filter(Boolean);
   const last = orders.find(o => o.status !== "cancelled");
   const lastPay = orders.map(o => o.last_payment_date).filter(Boolean).sort().pop();
   return <>
-    <PageHeader back={{ to: "/customers", label: "Customers" }} title={c.name} sub={[c.country, c.contact_name, c.email].filter(Boolean).join(" · ") || undefined}>
+    <PageHeader back={{ to: "/customers", label: "Customers" }} title={<span className="flex items-center gap-2">{c.name}{rec && <FavoriteStar r={rec} />}</span>} sub={[c.country, c.contact_name, c.email].filter(Boolean).join(" · ") || undefined}>
       <LinkButton to={`/orders/new`} variant="outline"><Plus />New order</LinkButton>
       <LinkButton to={customerPath(c, "/edit")} variant="outline"><Pencil />Edit</LinkButton></PageHeader>
     <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -97,6 +107,7 @@ export function CustomerForm() {
     back={row ? { to: customerPath(row), label: row.name } : { to: "/customers", label: "Customers" }} fields={fields}
     initial={row ? { ...row, exw_term: row.exw?.payment_term_id, fob_term: row.fob?.payment_term_id } : { exw_term: named("100% payment"), fob_term: named("30% deposit / 70% balance") }}
     onSubmit={async v => {
+      const doSave = async () => {
       const { exw_term, fob_term, ...c } = v;
       const id = row ? (await db.update("customers", { id: row.id }, c), row.id) : (await db.insert("customers", c)).id;
       for (const [type, term] of [["EXW", exw_term], ["FOB", fob_term]] as const) {
@@ -105,6 +116,9 @@ export function CustomerForm() {
         else await db.insert("customer_terms", { customer_id: id, order_type: type, payment_term_id: term });
       }
       return customerPath({ name: c.name });
+      };
+      const sims = findSimilar(v.name ?? "", rows, row?.id);
+      return sims.length && (!row || v.name !== row.name) ? similarWarning("customer", sims, customerPath, doSave) : doSave();
     }} />;
 }
 
@@ -134,9 +148,11 @@ export function SupplierDetail() {
   const { slug } = useParams(); const { rows, loading } = useSuppliers();
   const s = bySlug(rows, slug);
   const pos = useRows(s ? "v_purchase_orders" : null, { eq: { supplier_id: s?.id }, order: [["po_number", "desc"]] }).rows;
+  const rec = s ? { type: "supplier" as const, id: s.id, label: s.name, path: supplierPath(s), sub: s.country ?? undefined } : null;
+  useRecord(rec);
   if (!s) return loading ? <Loading /> : <NotFound what="Supplier" back={{ to: "/suppliers", label: "All suppliers" }} />;
   return <>
-    <PageHeader back={{ to: "/suppliers", label: "Suppliers" }} title={s.name} sub={[s.country, s.contact_name, s.email].filter(Boolean).join(" · ") || undefined}>
+    <PageHeader back={{ to: "/suppliers", label: "Suppliers" }} title={<span className="flex items-center gap-2">{s.name}{rec && <FavoriteStar r={rec} />}</span>} sub={[s.country, s.contact_name, s.email].filter(Boolean).join(" · ") || undefined}>
       <LinkButton to={supplierPath(s, "/edit")} variant="outline"><Pencil />Edit</LinkButton></PageHeader>
     <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
       {[s.eur, s.usd].filter(Boolean).map(x => <Stat key={x.currency} label={`Still to pay ${x.currency}`} value={money(x.outstanding, x.currency)} tone={Number(x.overdue) > 0 ? "bad" : undefined} />)}
@@ -172,6 +188,7 @@ export function SupplierForm() {
       { name: "notes", label: "Note", type: "textarea", section: "Note" }]}
     initial={row ? { ...row, exw_currency: row.exw?.currency, exw_deposit: row.exw?.deposit_pct, fob_currency: row.fob?.currency, fob_deposit: row.fob?.deposit_pct } : { exw_currency: "EUR", fob_currency: "USD" }}
     onSubmit={async v => {
+      const doSave = async () => {
       const { exw_currency, exw_deposit, fob_currency, fob_deposit, ...c } = v;
       const id = row ? (await db.update("suppliers", { id: row.id }, c), row.id) : (await db.insert("suppliers", c)).id;
       for (const [type, currency, dep] of [["EXW", exw_currency, exw_deposit], ["FOB", fob_currency, fob_deposit]] as const) {
@@ -180,5 +197,8 @@ export function SupplierForm() {
         else await db.insert("supplier_terms", { supplier_id: id, order_type: type, ...body });
       }
       return supplierPath({ name: c.name });
+      };
+      const sims = findSimilar(v.name ?? "", rows, row?.id);
+      return sims.length && (!row || v.name !== row.name) ? similarWarning("supplier", sims, supplierPath, doSave) : doSave();
     }} />;
 }

@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { toast } from "sonner";
-import type { DataClient, Row, SelectOpts } from "@/data/client";
+import type { DataClient, Row, SelectOpts, Session } from "@/data/client";
 
-interface Ctx { db: DataClient; version: number; refresh: () => void; run: <T>(fn: () => Promise<T>, done?: string) => Promise<T | undefined>;
+interface Ctx { db: DataClient; session: Session | null; version: number; refresh: () => void; run: <T>(fn: () => Promise<T>, done?: string) => Promise<T | undefined>;
   /** for forms: undefined when saved, false when the database refused (keeps the form open) */
   save: (fn: () => Promise<any>, done?: string) => Promise<void | false>; }
 const C = createContext<Ctx>(null as any);
@@ -15,7 +15,7 @@ export const errorText = (e: any) => String(e?.message ?? e).replace(/^error:\s*
   .replace(/new row for relation "(\w+)" violates check constraint "(\w+)"/, "Not allowed for $1 ($2)")
   .replace(/new row violates row-level security policy for table "(\w+)"/, "Your role may not change $1");
 
-export function AppProvider({ db, children }: { db: DataClient; children: ReactNode }) {
+export function AppProvider({ db, session = null, children }: { db: DataClient; session?: Session | null; children: ReactNode }) {
   const [version, setVersion] = useState(0);
   const refresh = useCallback(() => setVersion(v => v + 1), []);
   const run = useCallback(async <T,>(fn: () => Promise<T>, done?: string) => {
@@ -28,7 +28,7 @@ export function AppProvider({ db, children }: { db: DataClient; children: ReactN
     catch (e) { toast.error(errorText(e), { duration: 9000 }); return false; }
     finally { refresh(); }
   }, [refresh]);
-  return <C.Provider value={{ db, version, refresh, run, save }}>{children}</C.Provider>;
+  return <C.Provider value={{ db, session, version, refresh, run, save }}>{children}</C.Provider>;
 }
 
 // number of queries in flight, so a table can say "Loading…" instead of claiming it is empty (OMS-029)

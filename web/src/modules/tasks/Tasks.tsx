@@ -70,7 +70,7 @@ export function TasksSection({ eq, newLink, hide, className }: { eq: Record<stri
 
 // ---------------- /tasks ----------------
 export function Tasks() {
-  const q = useQuery(); const show = q.get("show") ?? "open";
+  const q = useQuery(); const show = q.get("show") ?? "open"; const { db } = useApp();
   const { rows } = useRows("v_tasks");
   const open = rows.filter(t => t.status === "open");
   const count = (s: string) => open.filter(t => t.state === s).length;
@@ -85,18 +85,33 @@ export function Tasks() {
     </div>
     <TabLinks tabs={[{ to: "/tasks", label: "Open", count: open.length }, { to: "/tasks?show=done", label: "Done" }, { to: "/tasks?show=all", label: "All" }]} />
     <Section>
-      <DataTable rows={shown} search exportName="tasks" rowTo={t => taskPath(t)} empty={show === "done" ? "No tasks done yet" : "Nothing to do. New tasks can be made from any order, PO or customer."}
+      <DataTable rows={shown} search exportName="tasks" rowTo={t => taskPath(t)} selectable bulk={(sel, clear) => <TasksBulk rows={sel} clear={clear} />} empty={show === "done" ? "No tasks done yet" : "Nothing to do. New tasks can be made from any order, PO or customer."}
         rowClass={t => t.status === "done" ? "text-gray-400" : undefined}
         cols={[
           { key: "x", header: "", width: "2.5rem", render: t => <DoneBox t={t} /> },
-          { key: "title", header: "Task", wrap: true, render: t => <div><div className={t.status === "done" ? "line-through" : "font-medium text-gray-900"}>{t.title}</div>{t.details && <div className="line-clamp-1 text-xs text-gray-500">{t.details}</div>}</div> },
+          { key: "title", header: "Task", wrap: true, edit: { kind: "text", save: (t, v) => db.update("tasks", { id: t.id }, { title: v }) }, render: t => <div><div className={t.status === "done" ? "line-through" : "font-medium text-gray-900"}>{t.title}</div>{t.details && <div className="line-clamp-1 text-xs text-gray-500">{t.details}</div>}</div> },
           { key: "links", header: "Linked to", value: t => [t.pi_number, t.po_number, t.customer_name, t.supplier_name].filter(Boolean).join(" "), render: t => <TaskLinks t={t} /> },
-          { key: "due_date", header: "Due", render: t => t.due_date ? <span className="inline-flex items-center gap-2">{dateShort(t.due_date)}{t.status === "open" && t.state !== "upcoming" && <Pill tone={TASK_STATE_TONE[t.state]}>{TASK_STATE_LABEL[t.state]}</Pill>}</span> : <span className="text-gray-400">–</span> },
+          { key: "due_date", header: "Due", edit: { kind: "date", save: (t, v) => db.update("tasks", { id: t.id }, { due_date: v }) }, render: t => t.due_date ? <span className="inline-flex items-center gap-2">{dateShort(t.due_date)}{t.status === "open" && t.state !== "upcoming" && <Pill tone={TASK_STATE_TONE[t.state]}>{TASK_STATE_LABEL[t.state]}</Pill>}</span> : <span className="text-gray-400">–</span> },
           { key: "assigned_name", header: "For", render: t => t.assigned_name ?? <span className="text-gray-400">anyone</span> },
           ...(show !== "open" ? [{ key: "done_at", header: "Done on", render: (t: any) => t.done_at ? dateShort(t.done_at) : "–" }] : []),
         ]} />
     </Section>
   </>;
+}
+
+function TasksBulk({ rows, clear }: { rows: any[]; clear: () => void }) {
+  const { db, run } = useApp(); const [due, setDue] = useState(""); const [confirm, setConfirm] = useState(false);
+  const all = (what: string, fn: (t: any) => Promise<unknown>) => run(async () => { for (const t of rows) await fn(t); }, `${what}: ${rows.length} task${rows.length === 1 ? "" : "s"}`).then(clear);
+  return <div className="flex flex-wrap items-center gap-2">
+    <Button size="sm" className="h-8" onClick={() => all("Done", t => db.update("tasks", { id: t.id }, { status: "done" }))}><Check className="h-3.5 w-3.5" />Mark done</Button>
+    <Button size="sm" variant="outline" className="h-8 bg-white" onClick={() => all("Reopened", t => db.update("tasks", { id: t.id }, { status: "open" }))}>Reopen</Button>
+    <span className="mx-1 h-5 w-px bg-indigo-200" />
+    <input type="date" aria-label="New due date" value={due} onChange={e => setDue(e.target.value)} className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm" />
+    <Button size="sm" variant="outline" className="h-8 bg-white" disabled={!due} onClick={() => all("Due date set", t => db.update("tasks", { id: t.id }, { due_date: due }))}>Set due date</Button>
+    <Button size="sm" variant="ghost" className="h-8 text-rose-600" onClick={() => setConfirm(true)}><Trash2 className="h-3.5 w-3.5" />Delete</Button>
+    <ConfirmDialog open={confirm} onClose={() => setConfirm(false)} danger title={`Delete ${rows.length} task${rows.length === 1 ? "" : "s"}?`} body="They are removed from every record they are linked to." confirmLabel="Delete"
+      onConfirm={() => all("Deleted", t => db.remove("tasks", { id: t.id }))} />
+  </div>;
 }
 
 // ---------------- /tasks/new and /tasks/:id ----------------

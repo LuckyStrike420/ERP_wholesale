@@ -7,6 +7,9 @@ import { useParams } from "@/app/router";
 import { byShort, bySlug, pricePath, productPath } from "@/app/paths";
 import { DataTable, FormPage, LinkButton, Loading, NotFound, PageHeader, Pill, Section, type Field } from "@/app/ui";
 import { date, money, pct, qty, today } from "@/app/format";
+import { FavoriteStar, useRecord } from "@/app/Favorites";
+import { findSimilar } from "@/app/duplicates";
+import { similarWarning } from "@/modules/parties/Parties";
 
 const TYPES = ["EXW", "FOB"] as const;
 
@@ -24,12 +27,17 @@ const rule = (x: any, cur: string) => !x || (x.cost_basis == null && x.share_abo
   : x.cost_basis == null ? `${pct(x.share_above_basis, 0)} of sale price` : `${money(x.cost_basis, cur, 2)} + ${pct(x.share_above_basis, 0)} above`;
 
 export function Products() {
-  const { rows, year } = useProducts(); const suppliers = useRows("suppliers").rows;
+  const { rows, year } = useProducts(); const suppliers = useRows("suppliers").rows; const { db } = useApp();
+  const field = (k: string) => (p: any, v: any) => db.update("products", { id: p.id }, { [k]: v });
   const sName = Object.fromEntries(suppliers.map(s => [s.id, s.name]));
   return <>
     <PageHeader title="Products" sub="Purchase price = basis + (sale price − basis) × share. Basis only is a fixed cost; share only is a percentage of the sale price."><LinkButton to="/products/new"><Plus />New product</LinkButton></PageHeader>
     <Section><DataTable rows={rows} search exportName="products" rowTo={p => productPath(p)} cols={[
       { key: "name", header: "Product", render: p => <div><div className="font-semibold text-gray-900">{p.name}</div><div className="text-xs text-gray-500">{[p.sku, sName[p.default_supplier_id]].filter(Boolean).join(" · ")}</div></div> },
+      { key: "sku", header: "SKU", render: p => p.sku ?? <span className="text-gray-400">–</span>, edit: { kind: "text", save: field("sku") } },
+      { key: "sale_price_fob", header: "Price FOB", align: "right", render: p => p.sale_price_fob != null ? money(p.sale_price_fob, "USD", 2) : <span className="text-gray-400">–</span>, edit: { kind: "number", save: field("sale_price_fob") } },
+      { key: "sale_price_exw", header: "Price EXW", align: "right", render: p => p.sale_price_exw != null ? money(p.sale_price_exw, "EUR", 2) : <span className="text-gray-400">–</span>, edit: { kind: "number", save: field("sale_price_exw") } },
+      { key: "units_per_carton", header: "Pcs/ctn", align: "right", render: p => p.units_per_carton ?? <span className="text-gray-400">–</span>, edit: { kind: "number", save: field("units_per_carton") } },
       { key: "fob", header: "FOB cost rule", value: p => p.fob?.cost_basis, render: p => rule(p.fob, "USD") }, { key: "exw", header: "EXW cost rule", value: p => p.exw?.cost_basis, render: p => rule(p.exw, "EUR") },
       { key: "stock", header: "NL stock", align: "right", render: p => Number(p.stock) ? qty(p.stock) : "–" }, { key: "units", header: `Sold ${year}`, align: "right", render: p => p.units ? qty(p.units) : "–" }]} /></Section>
   </>;
@@ -39,6 +47,8 @@ export function ProductForm() {
   const { slug } = useParams(); const { db } = useApp(); const { rows, loading } = useProducts();
   const suppliers = useRows("suppliers").rows; const kinds = useRows("product_kinds").rows;
   const row = slug ? bySlug(rows, slug) : undefined;
+  const rec = row ? { type: "product" as const, id: row.id, label: row.name, path: productPath(row), sub: row.sku ?? undefined } : null;
+  useRecord(rec);
   if (slug && !row) return loading ? <Loading /> : <NotFound what="Product" back={{ to: "/products", label: "All products" }} />;
   const fields: Field[] = [{ name: "name", label: "Product", required: true }, { name: "sku", label: "SKU", span: 1 }, { name: "kind", label: "Kind", type: "select", span: 1, options: kinds.map(k => ({ value: k.code, label: k.code })) },
     { name: "default_supplier_id", label: "Supplier", type: "select", options: suppliers.map(s => ({ value: s.id, label: s.name })) },
@@ -54,7 +64,7 @@ export function ProductForm() {
     { name: "carton_height_cm", label: "Carton height (cm)", type: "number", span: 1, section: "Packing" }, { name: "units_20ft", label: "Pieces 20ft", type: "number", span: 1, section: "Packing" },
     { name: "units_40ft", label: "Pieces 40ft", type: "number", span: 1, section: "Packing" }, { name: "units_40hc", label: "Pieces 40HC", type: "number", span: 1, section: "Packing" },
     { name: "notes", label: "Note", type: "textarea", section: "Note" }];
-  return <FormPage title={row ? row.name : "New product"} back={{ to: "/products", label: "Products" }} fields={fields}
+  return <FormPage title={row ? <span className="flex items-center gap-2">{row.name}{rec && <FavoriteStar r={rec} />}</span> : "New product"} back={{ to: "/products", label: "Products" }} fields={fields}
     sub={row ? "A changed cost rule is saved as a new version from the chosen date; the old version stays. Orders with a supplier invoice or a completed status keep their final cost." : undefined}
     initial={row ? { ...row, ...Object.fromEntries(TYPES.flatMap(t => { const x = row[t.toLowerCase()]; const k = t.toLowerCase(); return [[`${k}_basis`, x?.cost_basis], [`${k}_share`, x?.share_above_basis], [`${k}_royalty`, x?.royalty_per_unit]]; })) } : {}}
     onSubmit={async v => {
@@ -74,6 +84,7 @@ export function ProductForm() {
           else if (Object.values(body).some(x => x != null)) await db.insert("product_cost_rules", { product_id: id, order_type: t, ...body }); }
         return "/products";
       };
+      if (!row) { const sims = findSimilar(v.name ?? "", rows); if (sims.length) return similarWarning("product", sims, productPath, doSave); }
       if (!changedTypes.length) return doSave();
       const preview: any[] = [];
       for (const t of changedTypes) { const b = bodyOf(t);

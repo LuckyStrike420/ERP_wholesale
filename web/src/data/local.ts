@@ -103,7 +103,7 @@ export async function createLocalClient(): Promise<DataClient> {
       return URL.createObjectURL(new Blob([r.data as BlobPart], { type: r.mime ?? "application/octet-stream" }));
     },
     async removeFile(path) { if ((await db.query<{ t: string | null }>("select to_regclass('public.local_files')::text as t")).rows[0].t) await db.query("delete from public.local_files where path = $1", [path]); },
-    async session() { return { email: "local test database", name: "Local admin", role: "admin" }; },
+    async session() { return { id: null, email: "local test database", name: "Local admin", role: "admin" }; },
     async reset(empty) { await build(db, empty); },
     async importWorkbook(data, fileName, commit) {
       let saved = false; let result: any;

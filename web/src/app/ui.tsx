@@ -3,7 +3,7 @@
  * Design tokens: Tailwind gray neutrals, one accent (indigo), rose = late, amber = check, emerald = done.
  */
 import { useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, Search } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, Pencil, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,15 +105,41 @@ export const PaymentPill = ({ status }: { status: string }) =>
 export const SeverityPill = ({ s }: { s: string }) => <Pill tone={s === "error" ? "red" : s === "warning" ? "amber" : "sky"}>{s === "error" ? "Action" : s === "warning" ? "Check" : "Info"}</Pill>;
 
 // ---------------- table ----------------
-export interface Col<T = any> { key: string; header: string; align?: "right"; render?: (r: T) => ReactNode; value?: (r: T) => any; width?: string; wrap?: boolean; }
+/** edit: change this cell in the list itself (pencil on hover, or double-click); save writes it and the list reloads */
+export interface ColEdit<T = any> { kind: "text" | "number" | "date" | "select"; options?: { value: string; label: string }[]; get?: (r: T) => any; save: (r: T, v: any) => Promise<unknown>; can?: (r: T) => boolean }
+export interface Col<T = any> { key: string; header: string; align?: "right"; render?: (r: T) => ReactNode; value?: (r: T) => any; width?: string; wrap?: boolean; edit?: ColEdit<T>; }
+
+function InlineEditor<T>({ r, e, align, onDone }: { r: T; e: ColEdit<T>; align?: "right"; onDone: () => void }) {
+  const { run } = useApp();
+  const start = e.get ? e.get(r) : undefined;
+  const [v, setV] = useState<string>(start == null ? "" : String(start));
+  const commit = async (x: string) => {
+    const out = x.trim() === "" ? null : e.kind === "number" ? Number(x.replace(",", ".")) : x.trim();
+    if (e.kind === "number" && out !== null && isNaN(out as number)) { toast.error("Not a number"); return; }
+    if (String(out ?? "") !== String(start ?? "")) await run(() => e.save(r, out), "Saved");
+    onDone();
+  };
+  const cls = cn("h-8 w-full min-w-24 rounded-md border border-indigo-400 bg-white px-2 text-sm text-gray-900 shadow-sm outline-none ring-2 ring-indigo-100", align === "right" && "text-right");
+  return <span onClick={ev => ev.stopPropagation()} onDoubleClick={ev => ev.stopPropagation()} className="block">
+    {e.kind === "select"
+      ? <select autoFocus className={cls} value={v} onChange={ev => commit(ev.target.value)} onBlur={onDone} onKeyDown={ev => ev.key === "Escape" && onDone()}>
+          {e.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+      : <input autoFocus onFocus={ev => ev.target.select()} type={e.kind === "date" ? "date" : "text"} inputMode={e.kind === "number" ? "decimal" : undefined} className={cls} value={v}
+          onChange={ev => setV(ev.target.value)} onBlur={() => commit(v)} onKeyDown={ev => { if (ev.key === "Enter") commit(v); if (ev.key === "Escape") onDone(); }} />}
+  </span>;
+}
 
 const toCsv = (cols: Col[], rows: any[]) => [cols.filter(c => c.header).map(c => c.header), ...rows.map(r => cols.filter(c => c.header).map(c => (c.value ? c.value(r) : r[c.key]) ?? ""))]
   .map(line => line.map(v => /[",\n;]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v)).join(",")).join("\n");
 
-export function DataTable<T extends Record<string, any>>({ rows, cols, rowTo, onRow, search, empty = "Nothing here yet", exportName, toolbar, dense, initialSort, loading, rowClass }: {
+export function DataTable<T extends Record<string, any>>({ rows, cols, rowTo, onRow, search, empty = "Nothing here yet", exportName, toolbar, dense, initialSort, loading, rowClass, selectable, bulk }: {
   rows: T[]; cols: Col<T>[]; rowTo?: (r: T) => string | null | undefined; onRow?: (r: T) => void; search?: boolean; empty?: ReactNode; exportName?: string; toolbar?: ReactNode;
   dense?: boolean; initialSort?: [string, 1 | -1]; loading?: boolean; rowClass?: (r: T) => string | undefined;
+  /** tick rows and act on them all at once: bulk gets the ticked rows and a function that clears the ticks */
+  selectable?: boolean; bulk?: (selected: T[], clear: () => void) => ReactNode;
 }) {
+  const [picked, setPicked] = useState<Set<string>>(new Set()); const [editing, setEditing] = useState<string | null>(null);
+  const rowId = (r: T, i: number) => String(r.id ?? i);
   const nav = useNav();
   const anyLoading = useLoading(); const isLoading = loading ?? anyLoading;
   const [q, setQ] = useState(""); const [sort, setSort] = useState<[string, 1 | -1] | null>(initialSort ?? null);
@@ -131,12 +157,21 @@ export function DataTable<T extends Record<string, any>>({ rows, cols, rowTo, on
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, q, sort, cols]);
-  const copy = async () => { try { await navigator.clipboard.writeText(toCsv(cols, shown)); toast.success(`${shown.length} rows copied as CSV: paste into Excel`); } catch { toast.error("Copy was blocked by the browser"); } };
-  const download = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + toCsv(cols, shown)], { type: "text/csv" })); a.download = `${exportName}.csv`; a.click(); };
-  const go = (r: T) => { const to = rowTo?.(r); if (to) nav(to); else onRow?.(r); };
+  const selected = selectable ? shown.filter((r, i) => picked.has(rowId(r, i))) : [];
+  const exportRows = selected.length ? selected : shown;
+  const clear = () => setPicked(new Set());
+  const allOn = shown.length > 0 && selected.length === shown.length;
+  const copy = async () => { try { await navigator.clipboard.writeText(toCsv(cols, exportRows)); toast.success(`${exportRows.length} rows copied as CSV: paste into Excel`); } catch { toast.error("Copy was blocked by the browser"); } };
+  const download = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + toCsv(cols, exportRows)], { type: "text/csv" })); a.download = `${exportName}.csv`; a.click(); };
+  const go = (r: T) => { if (editing) return; const to = rowTo?.(r); if (to) nav(to); else onRow?.(r); };
   const clickable = !!(rowTo || onRow);
   return (
     <div>
+      {selected.length > 0 && <div className="flex flex-wrap items-center gap-2 border-b border-indigo-100 bg-indigo-50/70 px-4 py-2">
+        <span className="text-sm font-medium text-indigo-900">{selected.length} selected</span>
+        {bulk?.(selected, clear)}
+        <button type="button" onClick={clear} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-indigo-700 hover:text-indigo-900"><X className="h-3.5 w-3.5" />Clear selection</button>
+      </div>}
       {(search || exportName || toolbar) && (
         <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-2.5">
           {search && <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-gray-400" />
@@ -144,14 +179,16 @@ export function DataTable<T extends Record<string, any>>({ rows, cols, rowTo, on
           {toolbar}
           <div className="ml-auto flex items-center gap-1 text-xs text-gray-500">
             <span className="mr-2 tabular-nums">{shown.length} of {rows.length}</span>
-            {exportName && <Button variant="ghost" size="sm" className="h-8 text-gray-600" onClick={copy}><Copy className="mr-1 h-3.5 w-3.5" />Copy</Button>}
-            {exportName && <Button variant="ghost" size="sm" className="h-8 text-gray-600" onClick={download}><Download className="mr-1 h-3.5 w-3.5" />CSV</Button>}
+            {exportName && <Button variant="ghost" size="sm" className="h-8 text-gray-600" onClick={copy}><Copy className="mr-1 h-3.5 w-3.5" />{selected.length ? `Copy ${selected.length}` : "Copy"}</Button>}
+            {exportName && <Button variant="ghost" size="sm" className="h-8 text-gray-600" onClick={download}><Download className="mr-1 h-3.5 w-3.5" />{selected.length ? `CSV ${selected.length}` : "CSV"}</Button>}
           </div>
         </div>
       )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-gray-100 bg-gray-50/70 text-left text-xs text-gray-500">
+            {selectable && <th className="w-10 px-4 py-2.5"><input type="checkbox" aria-label="Select all" className="h-4 w-4 rounded border-gray-300 accent-indigo-600" checked={allOn}
+              ref={el => { if (el) el.indeterminate = selected.length > 0 && !allOn; }} onChange={() => setPicked(allOn ? new Set() : new Set(shown.map(rowId)))} /></th>}
             {cols.map(c => (
               <th key={c.key} style={{ width: c.width }} className={cn("select-none whitespace-nowrap px-4 py-2.5 font-medium", c.header && "cursor-pointer hover:text-gray-900", c.align === "right" && "text-right")}
                 onClick={() => c.header && setSort(s => (s && s[0] === c.key ? [c.key, (s[1] * -1) as 1 | -1] : [c.key, 1]))}>
@@ -159,11 +196,23 @@ export function DataTable<T extends Record<string, any>>({ rows, cols, rowTo, on
               </th>))}
           </tr></thead>
           <tbody>
-            {shown.map((r, i) => (
-              <tr key={r.id ?? i} onClick={clickable ? () => go(r) : undefined} className={cn("border-b border-gray-100 last:border-0", clickable && "cursor-pointer transition-colors hover:bg-gray-50", rowClass?.(r))}>
-                {cols.map(c => <td key={c.key} className={cn("px-4 align-top text-gray-700", !c.wrap && "whitespace-nowrap", dense ? "py-2" : "py-3", c.align === "right" && "text-right tabular-nums")}>{c.render ? c.render(r) : (r[c.key] ?? "–")}</td>)}
-              </tr>))}
-            {!shown.length && <tr><td colSpan={cols.length} className="px-4 py-10 text-center text-sm text-gray-500">{isLoading && !rows.length ? "Loading…" : empty}</td></tr>}
+            {shown.map((r, i) => { const id = rowId(r, i); const on = picked.has(id);
+              return <tr key={id} onClick={clickable ? () => go(r) : undefined} className={cn("border-b border-gray-100 last:border-0", clickable && "cursor-pointer transition-colors hover:bg-gray-50", on && "bg-indigo-50/40", rowClass?.(r))}>
+                {selectable && <td className={cn("px-4 align-top", dense ? "py-2" : "py-3")} onClick={e => e.stopPropagation()}>
+                  <input type="checkbox" aria-label="Select row" className="h-4 w-4 rounded border-gray-300 accent-indigo-600" checked={on}
+                    onChange={() => setPicked(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; })} /></td>}
+                {cols.map(c => { const cellKey = `${id}:${c.key}`; const can = c.edit && (!c.edit.can || c.edit.can(r));
+                  return <td key={c.key} onDoubleClick={can ? e => { e.stopPropagation(); setEditing(cellKey); } : undefined}
+                    className={cn("group/cell px-4 align-top text-gray-700", !c.wrap && "whitespace-nowrap", dense ? "py-2" : "py-3", c.align === "right" && "text-right tabular-nums")}>
+                    {editing === cellKey && c.edit ? <InlineEditor r={r} e={{ ...c.edit, get: c.edit.get ?? ((x: T) => x[c.key]) }} align={c.align} onDone={() => setEditing(null)} />
+                      : <span className={cn(can && "inline-flex items-start gap-1", can && c.align === "right" && "flex-row-reverse")}>
+                          <span>{c.render ? c.render(r) : (r[c.key] ?? "–")}</span>
+                          {can && <button type="button" aria-label={`Edit ${c.header}`} title={`Edit ${c.header}`} onClick={e => { e.stopPropagation(); setEditing(cellKey); }}
+                            className="rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:text-indigo-600 focus:opacity-100 group-hover/cell:opacity-100"><Pencil className="h-3 w-3" /></button>}
+                        </span>}
+                  </td>; })}
+              </tr>; })}
+            {!shown.length && <tr><td colSpan={cols.length + (selectable ? 1 : 0)} className="px-4 py-10 text-center text-sm text-gray-500">{isLoading && !rows.length ? "Loading…" : empty}</td></tr>}
           </tbody>
         </table>
       </div>

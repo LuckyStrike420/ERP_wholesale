@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { ArrowRightLeft, CheckCircle2, ClipboardList, FileText, MessageSquare, Pencil, Plus, Receipt, Ship, Sparkles, SquareCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MentionTextarea } from "@/app/Mentions";
 import { useApp, useRows } from "@/app/store";
 import { Section } from "@/app/ui";
 import { date, money } from "@/app/format";
@@ -37,9 +37,8 @@ export function OrderTimeline({ o, className }: { o: any; className?: string }) 
   return <Section title="Timeline" className={className}
     action={hidden > 0 || changes ? <button type="button" onClick={() => setChanges(c => !c)} className="text-xs font-medium text-gray-500 hover:text-gray-900">{changes ? "Hide field changes" : `Show ${hidden} field change${hidden === 1 ? "" : "s"}`}</button> : undefined}>
     <div className="border-b border-gray-100 px-5 py-3">
-      <Textarea aria-label="New note" rows={2} placeholder="Add a note: a call, an agreement, something to remember…" value={text} onChange={e => setText(e.target.value)}
-        onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) add(); }} className="border-gray-200 text-sm" />
-      <div className="mt-2 flex items-center justify-between"><span className="text-xs text-gray-400">Ctrl + Enter to save</span>
+      <MentionTextarea placeholder="Add a note: a call, an agreement, something to remember… Type @ to mention a colleague" value={text} onChange={setText} onSubmit={add} className="border-gray-200 text-sm" />
+      <div className="mt-2 flex items-center justify-between"><span className="text-xs text-gray-400">Ctrl + Enter to save · @ to mention</span>
         <Button size="sm" onClick={add} disabled={busy || !text.trim()}><Plus className="h-3.5 w-3.5" />Add note</Button></div>
     </div>
     {!shown.length ? <p className="px-5 py-8 text-center text-sm text-gray-500">Nothing logged yet</p> :

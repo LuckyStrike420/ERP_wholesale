@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Mail, Phone, Plus, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MentionTextarea } from "@/app/Mentions";
 import { useApp, useRows } from "@/app/store";
 import { Link, useNav, useParams } from "@/app/router";
 import { byShort, bySlug, customerPath, supplierPath } from "@/app/paths";
@@ -77,8 +77,7 @@ export function NotesSection({ party, p, className }: { party: Party; p: { id: s
   const add = async () => { if (!text.trim()) return; const r = await run(() => db.insert("record_notes", { body: text.trim(), [key(party)]: p.id }), "Note added"); if (r !== undefined) setText(""); };
   return <Section title="Notes" className={className}>
     <div className="border-b border-gray-100 px-5 py-3">
-      <Textarea aria-label="New note" rows={2} value={text} onChange={e => setText(e.target.value)} placeholder="A call, an agreement, something to remember…" className="border-gray-200 text-sm"
-        onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) add(); }} />
+      <MentionTextarea value={text} onChange={setText} onSubmit={add} placeholder="A call, an agreement, something to remember… Type @ to mention a colleague" className="border-gray-200 text-sm" />
       <div className="mt-2 flex justify-end"><Button size="sm" onClick={add} disabled={!text.trim()}><Plus className="h-3.5 w-3.5" />Add note</Button></div>
     </div>
     {!rows.length ? <p className="px-5 py-6 text-center text-sm text-gray-500">No notes yet</p> :

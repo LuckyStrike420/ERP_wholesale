@@ -5,12 +5,13 @@
  */
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { Command } from "cmdk";
-import { ArrowRight, BarChart3, Boxes, CheckSquare, ClipboardList, Factory, FileText, LayoutDashboard, Package, Plus, Receipt, Search, Settings, Ship, ShoppingCart, Tags, Users } from "lucide-react";
+import { ArrowRight, BarChart3, History, Star, Boxes, CheckSquare, ClipboardList, Factory, FileText, LayoutDashboard, Package, Plus, Receipt, Search, Settings, Ship, ShoppingCart, Tags, Users } from "lucide-react";
 import { useRows } from "./store";
 import { useNav } from "./router";
 import { customerPath, orderPath, poPath, productPath, supplierPath } from "./paths";
 import { money, STATUS_LABEL } from "./format";
 import { taskPath } from "@/modules/tasks/Tasks";
+import { TYPE_LABEL, useFavorites, useRecent } from "./Favorites";
 
 export const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const shortcutLabel = () => (isMac() ? "⌘K" : "Ctrl K");
@@ -77,6 +78,7 @@ export function CommandPalette() {
   const products = useRows(src("products"), { order: [["name", "asc"]] }).rows;
   const tasks = useRows(src("v_tasks"), { eq: { status: "open" } }).rows;
   const go = (to: string) => { setOpen(false); nav(to); };
+  const favs = useFavorites(); const recent = useRecent();
   const typed = query.trim().length > 0;
 
   return <Command.Dialog open={open} onOpenChange={setOpen} label="Search and go to" loop filter={score}
@@ -113,6 +115,13 @@ export function CommandPalette() {
           {tasks.map(t => <Item key={t.id} value={`task ${t.title}|${t.id}`} keywords={[t.pi_number ?? "", t.po_number ?? "", t.customer_name ?? "", t.supplier_name ?? ""]} icon={CheckSquare} onSelect={() => go(taskPath(t))}>{t.title}</Item>)}
         </Command.Group>
       </> : <>
+        {favs.length > 0 && <Command.Group heading="Favourites" className={groupCls}>
+          {favs.map(f => <Item key={f.entity_type + f.entity_id} value={`fav ${f.label}|${f.entity_id}`} icon={Star} onSelect={() => go(f.path)} hint={TYPE_LABEL[f.entity_type]}>{f.label}</Item>)}
+        </Command.Group>}
+        {recent.length > 0 && <Command.Group heading="Recent" className={groupCls}>
+          {recent.filter(r => !favs.some(f => f.entity_type === r.type && f.entity_id === r.id)).slice(0, 5).map(r => <Item key={r.type + r.id} value={`recent ${r.label}|${r.id}`} icon={History} onSelect={() => go(r.path)} hint={TYPE_LABEL[r.type]}>
+            {r.label}{r.sub && <span className="text-gray-500"> · {r.sub}</span>}</Item>)}
+        </Command.Group>}
         <Command.Group heading="Actions" className={groupCls}>
         {ACTIONS.map(([l, to, k]) => <Item key={to} value={`action ${l}`} keywords={k ? [k] : undefined} icon={Plus} onSelect={() => go(to)}>{l}</Item>)}
       </Command.Group>

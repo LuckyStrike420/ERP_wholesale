@@ -10,6 +10,7 @@ import { Check, ChevronDown, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { errorText } from "./store";
 import { cn } from "@/lib/utils";
+import { similarName } from "./duplicates";
 
 export interface Option { value: string; label: string; hint?: string; keywords?: string }
 
@@ -41,9 +42,12 @@ export function Combobox({ id, value, onChange, options, placeholder = "Type to 
   const items = useMemo(() => {
     const scored = options.map((o, i) => ({ o, i, s: typed ? matchScore(o, text) : 1 })).filter(x => x.s > 0);
     if (typed) scored.sort((a, b) => b.s - a.s || a.i - b.i);
-    const out: ({ kind: "option"; o: Option } | { kind: "create" | "free"; text: string })[] = scored.map(x => ({ kind: "option" as const, o: x.o }));
+    const out: ({ kind: "option"; o: Option; similar?: boolean } | { kind: "create" | "free"; text: string; like?: string })[] = scored.map(x => ({ kind: "option" as const, o: x.o }));
     const t = text.trim(); const exact = options.some(o => o.label.toLowerCase() === t.toLowerCase());
-    if (typed && t && !exact && create) out.push({ kind: "create", text: t });
+    // before adding a new one: names that look the same go first, so you pick the existing record instead
+    const sims = create && typed && t && !exact ? options.filter(o => similarName(o.label, t)) : [];
+    for (const o of [...sims].reverse()) { const i = out.findIndex(x => x.kind === "option" && x.o.value === o.value); if (i >= 0) out.splice(i, 1); out.unshift({ kind: "option", o, similar: true }); }
+    if (typed && t && !exact && create) out.push({ kind: "create", text: t, like: sims[0]?.label });
     if (typed && t && !exact && free) out.unshift({ kind: "free", text: t });
     return out;
   }, [options, text, typed, create, free]);
@@ -106,9 +110,9 @@ export function Combobox({ id, value, onChange, options, placeholder = "Type to 
           className={cn("flex cursor-pointer items-center gap-2 px-3 py-1.5", i === active ? "bg-indigo-50 text-gray-900" : "text-gray-700", it.kind !== "option" && "border-t border-gray-100 first:border-t-0")}>
           {it.kind === "option" ? <>
             <span className="min-w-0 flex-1 truncate">{it.o.label}</span>
-            {it.o.hint && <span className="shrink-0 text-xs text-gray-400">{it.o.hint}</span>}
+            {it.similar ? <span className="shrink-0 rounded bg-amber-50 px-1.5 text-[11px] font-medium text-amber-700">similar name</span> : it.o.hint && <span className="shrink-0 text-xs text-gray-400">{it.o.hint}</span>}
             {it.o.value === value && <Check className="h-3.5 w-3.5 shrink-0 text-indigo-600" />}
-          </> : it.kind === "create" ? <><Plus className="h-3.5 w-3.5 shrink-0 text-indigo-600" /><span className="font-medium text-indigo-700">Add “{it.text}” as new {createNoun}</span></>
+          </> : it.kind === "create" ? <><Plus className="h-3.5 w-3.5 shrink-0 text-indigo-600" /><span className="font-medium text-indigo-700">{it.like ? `Add “${it.text}” anyway as new ${createNoun}` : `Add “${it.text}” as new ${createNoun}`}</span></>
             : <><Check className="h-3.5 w-3.5 shrink-0 text-gray-400" /><span>Use “{it.text}”</span></>}
         </li>)}
       </ul>, document.body)}

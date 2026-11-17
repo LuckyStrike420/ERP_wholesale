@@ -9,6 +9,7 @@ import { DataTable, FormPage, KV, LinkButton, Loading, NotFound, PageHeader, Pil
 import { date, money, pct, qty, today } from "@/app/format";
 import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
 import { DocumentsSection } from "@/modules/documents/Documents";
+import { FavoriteStar, useRecord } from "@/app/Favorites";
 
 function usePO() {
   const { po } = useParams();
@@ -67,12 +68,14 @@ export function PurchaseOrderDetail() {
   const allocs = useRows(id && "v_allocations", { eq: { purchase_order_id: id }, order: [["payment_date", "asc"]] }).rows;
   const writeOffs = useRows(id && "write_offs", { eq: { purchase_order_id: id } }).rows;
   const products = useRows("products").rows; const suppliers = useRows("suppliers").rows;
+  const rec = p ? { type: "po" as const, id: p.id, label: `PO ${p.po_number}`, path: poPath(p), sub: p.supplier_name } : null;
+  useRecord(rec);
   if (!p) return loading ? <Loading what="Loading PO…" /> : <NotFound what={`PO ${no}`} back={{ to: "/purchasing", label: "All purchase orders" }} />;
   const cur = p.currency; const pName = Object.fromEntries(products.map(x => [x.id, x.name])); const base = poPath(p);
   const supplier = suppliers.find(s => s.id === p.supplier_id);
   return <>
     <PageHeader back={{ to: "/purchasing", label: "Purchase orders" }}
-      title={<span className="flex items-center gap-3">PO {p.po_number}{p.fully_paid && Number(p.payable) > 0 && <Pill tone="green">Paid</Pill>}{Number(p.overdue_amount) > 0 && <Pill tone="red">{p.days_late} days late</Pill>}</span>}
+      title={<span className="flex items-center gap-3">PO {p.po_number}{rec && <FavoriteStar r={rec} />}{p.fully_paid && Number(p.payable) > 0 && <Pill tone="green">Paid</Pill>}{Number(p.overdue_amount) > 0 && <Pill tone="red">{p.days_late} days late</Pill>}</span>}
       sub={<>{supplier ? <Link to={supplierPath(supplier)} className="text-gray-700 hover:text-indigo-600">{p.supplier_name}</Link> : p.supplier_name} · {p.order_type} · {cur}{p.pi_numbers ? ` · for PI ${p.pi_numbers}` : ""}</>}>
       <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>
       <LinkButton variant="outline" to={`${base}/invoice`}>{inv ? "Edit supplier invoice" : "Supplier invoice received"}</LinkButton>

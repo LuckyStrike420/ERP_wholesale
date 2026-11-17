@@ -26,7 +26,7 @@ export function createSupabaseClient(url: string, key: string): DataClient & { a
       const { data } = await sb.auth.getSession(); const u = data.session?.user;
       if (!u) return null;
       const p = await sb.from("profiles").select("full_name, role").eq("user_id", u.id).maybeSingle();
-      return { email: u.email ?? "", name: p.data?.full_name ?? null, role: p.data?.role ?? null };
+      return { id: u.id, email: u.email ?? "", name: p.data?.full_name ?? null, role: p.data?.role ?? null };
     },
     async signIn(email, password) { const r = await sb.auth.signInWithPassword({ email, password }); if (r.error) throw new Error(r.error.message); },
     async signOut() { await sb.auth.signOut(); },

@@ -27,7 +27,7 @@ export interface DataClient {
   /** local only: run the workbook import in the browser. Nothing is saved unless commit is true and every figure matches Excel. */
   importWorkbook?(data: Uint8Array, fileName: string, commit: boolean): Promise<{ result: ImportResult; saved: boolean }>;
 }
-export interface Session { email: string; name: string | null; role: "admin" | "finance" | "operations" | null }
+export interface Session { id: string | null; email: string; name: string | null; role: "admin" | "finance" | "operations" | null }
 export type { ImportResult } from "../../../src/import/importer";
 import type { ImportResult } from "../../../src/import/importer";
 

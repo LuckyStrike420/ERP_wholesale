@@ -7,7 +7,8 @@ import { useMemo, useState, type DragEvent } from "react";
 import { BookmarkPlus, Columns3, List, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useApp, useRows } from "@/app/store";
+import { errorText, useApp, useRows } from "@/app/store";
+import { toast } from "sonner";
 import { Link, useNav, useQuery } from "@/app/router";
 import { orderPath } from "@/app/paths";
 import { DataTable, LinkButton, PageHeader, PaymentPill, Section, StatusPill, selectClass } from "@/app/ui";
@@ -80,12 +81,14 @@ export default function OrdersList() {
 
     {view === "board" ? <Board orders={shown} showDone={status === "all" || status === "completed"} /> :
       <Section>
-        <DataTable rows={shown} exportName="orders" rowTo={o => orderPath(o)} empty="No orders match this filter"
+        <DataTable rows={shown} exportName="orders" rowTo={o => orderPath(o)} empty="No orders match this filter" selectable bulk={(sel, clear) => <OrdersBulk rows={sel} clear={clear} />}
           cols={[
             { key: "pi_number", header: "PI#", render: o => <span className="font-semibold text-gray-900">{o.pi_number ?? <span className="font-normal text-gray-400">draft</span>}</span> },
-            { key: "customer_name", header: "Customer", render: o => <div><div className="text-gray-900">{o.customer_name}</div><div className="text-xs text-gray-500">{o.order_type}{o.customer_po ? ` · PO ${o.customer_po}` : ""}</div></div> },
-            { key: "po_date", header: "PO date", render: o => date(o.po_date) },
-            { key: "status", header: "Status", render: o => <StatusPill status={o.status} /> },
+            { key: "customer_name", header: "Customer", render: o => <div><div className="text-gray-900">{o.customer_name}</div><div className="text-xs text-gray-500">{o.order_type}</div></div> },
+            { key: "customer_po", header: "Customer PO", render: o => o.customer_po ?? <span className="text-gray-400">–</span>, edit: { kind: "text", save: (o, v) => db.update("sales_orders", { id: o.id }, { customer_po: v }), can: o => !["completed", "cancelled"].includes(o.status) } },
+            { key: "po_date", header: "PO date", render: o => date(o.po_date), edit: { kind: "date", save: (o, v) => db.update("sales_orders", { id: o.id }, { po_date: v }), can: o => !["completed", "cancelled"].includes(o.status) } },
+            { key: "status", header: "Status", render: o => <StatusPill status={o.status} />, edit: { kind: "select", options: STATUS_ORDER.filter(s => s !== "draft").map(s => ({ value: s, label: STATUS_LABEL[s] })),
+                save: (o, v) => db.update("sales_orders", { id: o.id }, { status: v }), can: o => !["completed", "cancelled", "draft"].includes(o.status) } },
             { key: "total_receivable", header: "Order total", align: "right", render: o => money(o.total_receivable, o.currency) },
             { key: "margin_pct", header: "Margin", align: "right", render: o => <span className={Number(o.cost_missing_lines) > 0 ? "text-amber-600" : ""} title={Number(o.cost_missing_lines) > 0 ? `${o.cost_missing_lines} line(s) without cost price` : undefined}>{marginPct(o.margin_pct, o.cost_missing_lines)}</span> },
             { key: "outstanding", header: "Outstanding", align: "right", render: o => <span className={Number(o.overdue_amount) > 0 ? "font-semibold text-rose-600" : Number(o.outstanding) > 0.01 ? "font-medium text-gray-900" : "text-gray-400"}>{money(o.outstanding, o.currency)}</span> },
@@ -95,6 +98,30 @@ export default function OrdersList() {
           ]} />
       </Section>}
   </>;
+}
+
+// ---------------- several orders at once ----------------
+function OrdersBulk({ rows, clear }: { rows: any[]; clear: () => void }) {
+  const { db, refresh } = useApp();
+  const [title, setTitle] = useState(""); const [due, setDue] = useState(""); const [busy, setBusy] = useState(false);
+  // one by one, so one refused order (a rule in the database) does not stop the others
+  const each = async (what: string, fn: (o: any) => Promise<unknown>) => {
+    setBusy(true); let ok = 0; const failed: string[] = [];
+    for (const o of rows) { try { await fn(o); ok++; } catch (e) { failed.push(`${o.pi_number ?? "draft"}: ${errorText(e)}`); } }
+    setBusy(false); refresh();
+    if (ok) toast.success(`${what}: ${ok} order${ok === 1 ? "" : "s"}`);
+    if (failed.length) toast.error(<div><b>Not changed ({failed.length})</b>{failed.slice(0, 5).map(f => <div key={f} className="text-xs">{f}</div>)}</div>, { duration: 12000 });
+    if (!failed.length) clear();
+  };
+  return <div className="flex flex-wrap items-center gap-2">
+    <select aria-label="Move selected to status" className={selectClass + " h-8 w-48"} value="" disabled={busy}
+      onChange={e => { const s = e.target.value; if (s) each(`Status ${STATUS_LABEL[s]}`, o => db.update("sales_orders", { id: o.id }, { status: s })); }}>
+      <option value="">Move to status…</option>{STATUS_ORDER.filter(s => s !== "draft").map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select>
+    <span className="mx-1 h-5 w-px bg-indigo-200" />
+    <Input aria-label="Task title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Task for each, e.g. Chase deposit" className="h-8 w-60 border-gray-300 bg-white text-sm" />
+    <Input aria-label="Task due date" type="date" value={due} onChange={e => setDue(e.target.value)} className="h-8 w-36 border-gray-300 bg-white text-sm" />
+    <Button size="sm" className="h-8" disabled={busy || !title.trim()} onClick={() => each("Task added", o => db.insert("tasks", { title: `${title.trim()} (PI ${o.pi_number ?? "draft"})`, due_date: due || null, sales_order_id: o.id }))}>Add task</Button>
+  </div>;
 }
 
 // ---------------- board ----------------

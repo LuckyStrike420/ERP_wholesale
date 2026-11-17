@@ -21,6 +21,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0015_payment_terms.sql` | `0015_payment_terms` | ja (17 nov 2026) |
 | `0016_tasks_notes_documents.sql` | `0016_tasks_notes_documents` (plus opslagbucket `documents`) | ja (17 nov 2026) |
 | `0017_documents_contacts_views.sql` | `0017_documents_contacts_views` | ja (17 nov 2026) |
+| `0018_favorites_notifications.sql` | `0018_favorites_notifications` | ja (17 nov 2026) |
 
 ## Regels
 
