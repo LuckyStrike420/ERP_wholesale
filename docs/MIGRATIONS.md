@@ -12,6 +12,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0006_function_settings.sql` | `0006_function_settings` | ja |
 | `0007_unknown_is_not_zero.sql` | `0007_unknown_is_not_zero` | ja (11 nov 2026) |
 | `0008_cost_history_and_settings.sql` | `0008_cost_history_and_settings` | ja (11 nov 2026) |
+| `0009_open_items.sql` | `0009_open_items` (plus `v_open_items_totals`, los toegepast met dezelfde SQL) | ja (17 nov 2026) |
 
 ## Regels
 
@@ -21,3 +22,8 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 4. Nieuwe tabellen, views en functies krijgen expliciet `grant ... to authenticated` (zie `0005`).
 5. De website verwacht de nieuwe kolommen/views zodra hij is uitgerold. Daarom: **eerst de migratie op Supabase, dan pas de website uitrollen** (en nooit andersom).
 6. Terugdraaien van een view-migratie: de vorige viewdefinitie opnieuw toepassen (staat in het vorige bestand). Gegevens worden door deze migraties niet gewijzigd.
+
+## Data vervangen door werkmap V5 (17 nov 2026)
+
+Op verzoek is alle bedrijfsdata (klanten, leveranciers, producten, orders, inkoop, betalingen, voorraad, zendingen, importlog) vervangen door `YP_Order-_en_betaalsheetV5.xlsx`.
+Gebruikers, rollen, instellingen en het auditlog zijn gebleven. De volledige vorige stand staat in het schema `backup_20261117` (niet bereikbaar voor de app).

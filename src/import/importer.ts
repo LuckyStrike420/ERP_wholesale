@@ -255,6 +255,7 @@ export async function importWorkbook(db: Db, data: Uint8Array, fileName: string,
     groups.get(key)!.push(r);
   }
   const orders = new Map<string, { id: string; isNew: boolean; rows: Row[] }>();   // by PI#
+  const finalStatus = new Map<string, { pi: string | null; status: string; row: Row | null }>();
   const missingFromOverview: string[] = [];
   for (const [key, rows] of groups) {
     const first = rows[0]; const pi = txt(man(first, 'A'));
@@ -284,8 +285,11 @@ export async function importWorkbook(db: Db, data: Uint8Array, fileName: string,
       const ex = await q1(`select id from sales_orders where pi_number is null and customer_id=$1 and order_type=$2 and customer_po is not distinct from $3::text and po_date is not distinct from $4::date`, [cid, type, custPo, poDate]);
       if (ex) { bump(skipped, 'sales_orders'); continue; }
     }
+    // completed and cancelled orders are closed: their lines, invoice and payments are entered first, the final status is set at the end
+    const interim = status === 'completed' ? 'delivered' : status === 'cancelled' ? 'pi_sent' : status;
     const o = await q1(`insert into sales_orders (pi_number, order_type, customer_id, customer_po, po_date, status, notes) values ($1,$2,$3,$4,$5,$6,$7) returning id`,
-      [pi, type, cid, custPo, poDate, status, ov ? txt(man(ov, 'Y')) : null]);
+      [pi, type, cid, custPo, poDate, interim, ov ? txt(man(ov, 'Y')) : null]);
+    if (interim !== status) finalStatus.set(o.id, { pi, status, row: ov ?? null });
     bump(created, 'sales_orders');
     if (pi) orders.set(pi, { id: o.id, isNew: true, rows });
 
@@ -328,7 +332,7 @@ export async function importWorkbook(db: Db, data: Uint8Array, fileName: string,
     if (invNo && invDate) { await q(`insert into invoices (sales_order_id, invoice_number, invoice_date) values ($1,$2,$3)`, [o.id, invNo, invDate]); bump(created, 'invoices'); }
     else if (invNo || invDate) issue('warning', 'PI overzicht', r, 'invoice_incomplete', `PI ${pi}: invoice needs both number and date; not imported`);
     const dep = numv(man(r, 'O')), bal = numv(man(r, 'T')), wo = numv(man(r, 'U'));
-    if ((dep || bal) && ['draft', 'cancelled'].includes(head.status)) { issue('error', 'PI overzicht', r, 'payment_on_closed_order', `PI ${pi} is ${head.status} but has payments; payments not imported`); }
+    if ((dep || bal) && (head.status === 'draft' || finalStatus.get(o.id)?.status === 'cancelled')) { issue('error', 'PI overzicht', r, 'payment_on_closed_order', `PI ${pi} is ${head.status} but has payments; payments not imported`); }
     else {
       if (dep) await bookPayment('in', head.customer_id, o.id, head.currency, xlDate(man(r, 'N')), dep, `Excel aanbetaling PI ${pi}`, 'PI overzicht', r, head.po_date);
       if (bal) await bookPayment('in', head.customer_id, o.id, head.currency, xlDate(man(r, 'S')), bal, `Excel restbetaling PI ${pi}`, 'PI overzicht', r, invDate ?? head.po_date);
@@ -337,9 +341,20 @@ export async function importWorkbook(db: Db, data: Uint8Array, fileName: string,
   }
   // requested deposit is fixed for everything past draft
   for (const o of orders.values()) if (o.isNew) await q(`select recalculate_deposit(id) from sales_orders where id=$1 and status not in ('draft','cancelled')`, [o.id]);
+  // closed orders get their final status now that lines, invoice and payments are in
+  for (const [id, f] of finalStatus) {
+    try {
+      await q(`savepoint final_status`);
+      await q(`update sales_orders set status = $2 where id = $1`, [id, f.status]);
+      await q(`release savepoint final_status`);
+    } catch (e: any) {
+      await q(`rollback to savepoint final_status`);
+      issue('warning', 'PI overzicht', f.row, 'status_not_reached', `PI ${f.pi}: kept as "delivered" instead of "${f.status}": ${e?.message ?? e}`);
+    }
+  }
   // the import must reproduce the statuses of the workbook, not advance them
   for (const [pi, o] of orders) {
-    if (!o.isNew) continue;
+    if (!o.isNew || finalStatus.has(o.id)) continue;   // closed orders are reported above
     const ov = piRows.get(pi); const want = ov && txt(man(ov, 'H')) ? STATUS_MAP[txt(man(ov, 'H'))!] : 'pi_sent';
     const cur = (await q1(`select status from sales_orders where id=$1`, [o.id])).status;
     if (want && cur !== want) issue('info', 'PI overzicht', ov ?? null, 'status_advanced', `PI ${pi}: deposit is covered, status moved from "${want}" to "${cur}"`);

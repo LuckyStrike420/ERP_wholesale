@@ -26,3 +26,9 @@ export const PAYMENT_LABEL: Record<string, string> = {
 };
 export const SOURCE_LABEL: Record<string, string> = { override: "Override", batch: "Batch", agreement: "Price agreement", product_rule: "Product rule" };
 export const SHIP_LABEL: Record<string, string> = { awaiting_info: "Awaiting shipping info", planned: "Planned", in_transit: "In transit", arrived: "Arrived" };
+
+export const days = (n: any) => (n === null || n === undefined ? "–" : `${n} day${Number(n) === 1 ? "" : "s"}`);
+export const BUCKET_LABEL: Record<string, string> = { overdue: "Overdue", reminder: "Reminder due", due_soon: "Due within 7 days", scheduled: "Scheduled", no_due_date: "No due date" };
+export const BUCKET_TONE: Record<string, string> = { overdue: "red", reminder: "amber", due_soon: "amber", scheduled: "green", no_due_date: "grey" };
+/** "6 Nov" in the current year, "6 Nov 2025" otherwise */
+export const dateShort = (v: any) => { if (!v) return "–"; const d = date(v); return String(v).slice(0, 4) === String(new Date().getFullYear()) ? d.replace(/ \d{4}$/, "") : d; };

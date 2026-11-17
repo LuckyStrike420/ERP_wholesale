@@ -55,12 +55,4 @@ export function useRows<T = any>(from: string | null, opts: SelectOpts = {}): { 
 }
 export function useRow<T = any>(from: string, eq: Row): T | undefined { return useRows<T>(from, { eq }).rows[0]; }
 
-// ---- routing on a plain #name (the only form that survives inside an embedded page) ----
-export function useRoute(): [string, (r: string) => void] {
-  const read = () => window.location.hash.replace(/^#/, "") || "dashboard";
-  const [route, setRoute] = useState(read);
-  useEffect(() => { const h = () => setRoute(read()); window.addEventListener("hashchange", h); return () => window.removeEventListener("hashchange", h); }, []);
-  return [route, (r: string) => { window.location.hash = r; setRoute(r); window.scrollTo(0, 0); }];
-}
-export const NavCtx = createContext<(r: string) => void>(() => {});
-export const useNav = () => useContext(NavCtx);
+export { useNav } from "./router";

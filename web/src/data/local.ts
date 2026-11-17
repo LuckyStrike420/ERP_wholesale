@@ -31,7 +31,7 @@ async function build(db: PGlite, empty = false) {
   await db.exec("drop schema if exists public cascade; create schema public;");
   await migrate(db);
   if (empty) return;
-  const seed = await (await fetch("./seed.json")).json();
+  const seed = await (await fetch(`${import.meta.env.BASE_URL}seed.json`)).json();
   // imported rows are loaded as they are: no triggers, so nothing is recalculated or re-audited
   await db.exec("set session_replication_role = replica");
   for (const t of seed.tables as string[]) {

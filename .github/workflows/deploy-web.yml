@@ -45,6 +45,10 @@ jobs:
         working-directory: .
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+      # Readable URLs such as /orders/26179: GitHub Pages answers unknown paths with 404.html, which is the app itself.
+      - run: cp dist/index.html dist/404.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist

@@ -1,83 +1,76 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, BarChart3, Boxes, Building2, ClipboardList, Factory, LayoutDashboard, LogOut, Package, Receipt, Settings, Ship, ShoppingCart, Tags, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, BarChart3, Boxes, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, Package, Plus, Receipt, Settings, Ship, ShoppingCart, Tags, Users, X } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient, type DataClient, type Session } from "@/data/client";
-import { AppProvider, NavCtx, errorText, useRoute, useRows } from "@/app/store";
+import { AppProvider, errorText, useRows } from "@/app/store";
+import { Link, ParamsProvider, RouterProvider, match, usePath } from "@/app/router";
+import { NotFound } from "@/app/ui";
 import { cn } from "@/lib/utils";
-import Dashboard from "@/pages/Dashboard";
-import Orders from "@/pages/Orders";
-import OrderDetail from "@/pages/OrderDetail";
-import { PurchaseOrders, PurchaseOrderDetail } from "@/pages/Purchasing";
-import { Payments, Shipping, Stock } from "@/pages/Operations";
-import { Customers, Suppliers, Products, Prices } from "@/pages/Master";
-import Reports from "@/pages/Reports";
-import Admin from "@/pages/Admin";
+import { ROUTES } from "@/routes";
 
-const NAV: { group: string; items: { route: string; label: string; icon: any }[] }[] = [
-  { group: "", items: [{ route: "dashboard", label: "Dashboard", icon: LayoutDashboard }] },
-  { group: "Sales", items: [{ route: "orders", label: "Orders", icon: ShoppingCart }, { route: "customers", label: "Customers", icon: Users }, { route: "prices", label: "Price agreements", icon: Tags }] },
-  { group: "Purchasing", items: [{ route: "purchasing", label: "Purchase orders", icon: ClipboardList }, { route: "suppliers", label: "Suppliers", icon: Factory }] },
-  { group: "Money", items: [{ route: "payments", label: "Payments", icon: Receipt }] },
-  { group: "Logistics", items: [{ route: "shipping", label: "Shipping", icon: Ship }, { route: "stock", label: "NL stock", icon: Boxes }, { route: "products", label: "Products", icon: Package }] },
-  { group: "Insight", items: [{ route: "reports", label: "Reports", icon: BarChart3 }, { route: "admin", label: "Admin", icon: Settings }] },
+const NAV: { group: string; items: { to: string; section: string; label: string; icon: any }[] }[] = [
+  { group: "", items: [{ to: "/", section: "dashboard", label: "Overview", icon: LayoutDashboard }, { to: "/payments", section: "payments", label: "Payments", icon: Receipt }] },
+  { group: "Sales", items: [{ to: "/orders", section: "orders", label: "Orders", icon: ShoppingCart }, { to: "/customers", section: "customers", label: "Customers", icon: Users }, { to: "/prices", section: "prices", label: "Price agreements", icon: Tags }] },
+  { group: "Purchasing", items: [{ to: "/purchasing", section: "purchasing", label: "Purchase orders", icon: ClipboardList }, { to: "/suppliers", section: "suppliers", label: "Suppliers", icon: Factory }] },
+  { group: "Logistics", items: [{ to: "/shipping", section: "shipping", label: "Shipping", icon: Ship }, { to: "/stock", section: "stock", label: "NL stock", icon: Boxes }, { to: "/products", section: "products", label: "Products", icon: Package }] },
+  { group: "Insight", items: [{ to: "/reports", section: "reports", label: "Reports", icon: BarChart3 }, { to: "/admin", section: "admin", label: "Admin", icon: Settings }] },
 ];
-const section = (route: string) => (route.startsWith("order-") ? "orders" : route.startsWith("po-") ? "purchasing" : route.split("/")[0]);
 
-function Page({ route }: { route: string }): ReactNode {
-  if (route.startsWith("order-")) return <OrderDetail key={route} id={route.slice(6)} />;
-  if (route.startsWith("po-")) return <PurchaseOrderDetail key={route} id={route.slice(3)} />;
-  switch (route) {
-    case "orders": return <Orders />;
-    case "purchasing": return <PurchaseOrders />;
-    case "payments": return <Payments />;
-    case "shipping": return <Shipping />;
-    case "stock": return <Stock />;
-    case "customers": return <Customers />;
-    case "suppliers": return <Suppliers />;
-    case "products": return <Products />;
-    case "prices": return <Prices />;
-    case "reports": return <Reports />;
-    case "admin": return <Admin />;
-    default: return <Dashboard />;
-  }
+function resolve(path: string) {
+  for (const r of ROUTES) { const p = match(r.path, path); if (p) return { route: r, params: p }; }
+  return null;
 }
 
 function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; onSignOut: () => void }) {
-  const [route, nav] = useRoute();
-  const counts = useRows("v_attention_counts").rows[0];
-  const attention = Number(counts?.actionable ?? 0), infoCount = Number(counts?.info_count ?? 0);
+  const path = usePath();
+  const hit = resolve(path);
+  const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(false), [path]);
+  const totals = useRows("v_open_items_totals").rows;
+  const overdue = totals.filter(t => t.direction === "in").reduce((a, t) => a + Number(t.overdue_items), 0);
+  const reminders = useRows("v_open_items_summary", { eq: { direction: "in", bucket: "reminder" } }).rows.reduce((a, t) => a + Number(t.items), 0);
+  const badge = overdue + reminders;
+  const Page = hit?.route.page;
+  const nav = <nav className="flex-1 overflow-y-auto px-3 py-4">
+    {NAV.map(g => (
+      <div key={g.group} className="mb-5">
+        {g.group && <div className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{g.group}</div>}
+        {g.items.map(i => { const on = hit?.route.section === i.section;
+          return <Link key={i.to} to={i.to} aria-current={on ? "page" : undefined}
+            className={cn("flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors", on ? "bg-gray-100 font-medium text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900")}>
+            <i.icon className={cn("h-4 w-4 shrink-0", on ? "text-indigo-600" : "text-gray-400")} /><span className="flex-1">{i.label}</span>
+            {i.section === "payments" && badge > 0 && <span title={`${overdue} overdue, ${reminders} EXW reminder(s)`} className="rounded-full bg-rose-100 px-1.5 text-[11px] font-semibold tabular-nums text-rose-700">{badge}</span>}
+          </Link>; })}
+      </div>))}
+  </nav>;
+  const brand = <div className="flex items-center gap-2.5 px-5 py-4">
+    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white">YP</div>
+    <div><div className="text-sm font-semibold leading-tight text-gray-900">Your Products</div><div className="text-[11px] leading-tight text-gray-500">Orders & payments</div></div>
+  </div>;
+  const foot = <div className="border-t border-gray-100 px-4 py-3 text-xs">
+    {db.mode === "local"
+      ? <div className="flex items-start gap-1.5 text-amber-800"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>Local test database. Data lives in this browser only.</span></div>
+      : <div className="flex items-center justify-between gap-2"><div className="min-w-0"><div className="truncate font-medium text-gray-900">{session.name ?? session.email}</div><div className="text-gray-500">{session.role ?? "no role"}</div></div>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onSignOut} title="Sign out" aria-label="Sign out"><LogOut className="h-3.5 w-3.5" /></Button></div>}
+  </div>;
   return (
-    <NavCtx.Provider value={nav}>
-      <div className="flex min-h-screen bg-slate-50 text-slate-900">
-        <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r bg-white">
-          <div className="flex items-center gap-2 border-b px-4 py-3.5">
-            <Building2 className="h-5 w-5 text-sky-700" />
-            <div><div className="text-sm font-semibold leading-tight">Your Products</div><div className="text-[11px] leading-tight text-muted-foreground">Orders & payments</div></div>
-          </div>
-          <nav className="flex-1 overflow-y-auto px-2 py-3">
-            {NAV.map(g => (
-              <div key={g.group} className="mb-3">
-                {g.group && <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.group}</div>}
-                {g.items.map(i => (
-                  <button key={i.route} onClick={() => nav(i.route)}
-                    className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm", section(route) === i.route ? "bg-sky-50 font-medium text-sky-900" : "text-slate-700 hover:bg-slate-100")}>
-                    <i.icon className="h-4 w-4 shrink-0" /><span className="flex-1">{i.label}</span>
-                    {i.route === "dashboard" && attention > 0 && <span title={`${attention} item(s) to act on${infoCount ? `; ${infoCount} more are information only` : ""}`} className="rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">{attention}</span>}
-                  </button>))}
-              </div>))}
-          </nav>
-          <div className="border-t px-3 py-2.5 text-xs">
-            {db.mode === "local"
-              ? <div className="flex items-start gap-1.5 text-amber-800"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>Local test database. Data lives in this browser only.</span></div>
-              : <div className="flex items-center justify-between gap-2"><div className="min-w-0"><div className="truncate font-medium">{session.name ?? session.email}</div><div className="text-muted-foreground">{session.role ?? "no role"}</div></div>
-                  <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onSignOut} title="Sign out"><LogOut className="h-3.5 w-3.5" /></Button></div>}
-          </div>
-        </aside>
-        <main className="min-w-0 flex-1 px-6 py-5"><div className="mx-auto max-w-[1400px]"><Page route={route} /></div></main>
+    <div className="flex min-h-screen bg-gray-50 text-gray-900">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex">{brand}{nav}{foot}</aside>
+      {open && <div className="fixed inset-0 z-40 lg:hidden"><div className="absolute inset-0 bg-gray-900/30" onClick={() => setOpen(false)} />
+        <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl">{brand}{nav}{foot}</aside></div>}
+      <div className="min-w-0 flex-1">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-white/80 px-4 backdrop-blur lg:hidden">
+          <Button variant="ghost" size="icon" onClick={() => setOpen(o => !o)} aria-label="Menu">{open ? <X /> : <Menu />}</Button>
+          <span className="text-sm font-semibold">Your Products</span>
+          <Link to="/orders/new" className="ml-auto inline-flex h-8 items-center gap-1 rounded-md bg-indigo-600 px-3 text-xs font-medium text-white"><Plus className="h-3.5 w-3.5" />Order</Link>
+        </header>
+        <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1400px]">
+          {Page ? <ParamsProvider value={hit!.params}><Page key={path} /></ParamsProvider> : <NotFound what="This page" back={{ to: "/", label: "Go to the overview" }} />}
+        </div></main>
       </div>
-    </NavCtx.Provider>
+    </div>
   );
 }
 
@@ -85,9 +78,9 @@ function SignIn({ db, onDone }: { db: DataClient; onDone: () => void }) {
   const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const go = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); setErr("");
     try { await db.signIn!(email, pw); onDone(); } catch (x) { setErr(errorText(x)); } finally { setBusy(false); } };
-  return <div className="flex min-h-screen items-center justify-center bg-slate-50">
-    <form onSubmit={go} className="w-80 rounded-lg border bg-white p-6 shadow-sm">
-      <div className="mb-4 flex items-center gap-2"><Building2 className="h-5 w-5 text-sky-700" /><span className="font-semibold">Your Products · Orders & payments</span></div>
+  return <div className="flex min-h-screen items-center justify-center bg-gray-50">
+    <form onSubmit={go} className="w-80 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-center gap-2"><div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white">YP</div><span className="font-semibold">Your Products · Orders & payments</span></div>
       <label className="mb-1 block text-xs font-medium text-muted-foreground">E-mail</label>
       <Input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} className="mb-3" required />
       <label className="mb-1 block text-xs font-medium text-muted-foreground">Password</label>
@@ -105,7 +98,7 @@ export default function App() {
   if (err) return <div className="p-10 text-sm text-red-800">The database could not be opened: {err}</div>;
   if (!db || session === undefined) return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Opening the database…</div>;
   if (!session) return <SignIn db={db} onDone={reload} />;
-  if (!session.role) return <div className="p-10 text-sm">You are signed in as {session.email}, but no role has been assigned to this account yet. Ask the admin to add you under Admin → Users.
+  if (!session.role) return <div className="p-10 text-sm">You are signed in as {session.email}, but no role has been assigned to this account yet. Ask the admin to give your account a role under Admin → Users.
     <Button variant="outline" size="sm" className="ml-3" onClick={async () => { await db.signOut?.(); reload(); }}>Sign out</Button></div>;
-  return <AppProvider db={db}><Shell db={db} session={session} onSignOut={async () => { await db.signOut?.(); reload(); }} /><Toaster position="bottom-right" richColors /></AppProvider>;
+  return <RouterProvider><AppProvider db={db}><Shell db={db} session={session} onSignOut={async () => { await db.signOut?.(); reload(); }} /><Toaster position="bottom-right" richColors /></AppProvider></RouterProvider>;
 }
