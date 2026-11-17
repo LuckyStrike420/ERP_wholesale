@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, BarChart3, Boxes, CheckSquare, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, Package, Plus, Receipt, Settings, Ship, ShoppingCart, Tags, Users, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Boxes, CheckSquare, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, Package, Plus, Receipt, Search, Settings, Ship, ShoppingCart, Tags, Users, X } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Link, ParamsProvider, RouterProvider, match, usePath } from "@/app/rout
 import { NotFound } from "@/app/ui";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/routes";
+import { CommandPalette, shortcutLabel, showCommandPalette } from "@/app/CommandPalette";
 
 const NAV: { group: string; items: { to: string; section: string; label: string; icon: any }[] }[] = [
   { group: "", items: [{ to: "/", section: "dashboard", label: "Overview", icon: LayoutDashboard }, { to: "/payments", section: "payments", label: "Payments", icon: Receipt }, { to: "/tasks", section: "tasks", label: "Tasks", icon: CheckSquare }] },
@@ -52,6 +53,10 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-xs font-bold text-white">YP</div>
     <div><div className="text-sm font-semibold leading-tight text-gray-900">Your Products</div><div className="text-[11px] leading-tight text-gray-500">Orders & payments</div></div>
   </div>;
+  const search = <div className="px-3 pt-1">
+    <button type="button" onClick={showCommandPalette} className="flex w-full items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700">
+      <Search className="h-4 w-4" /><span className="flex-1 text-left">Search…</span><kbd className="rounded border border-gray-200 bg-white px-1 text-[10px] font-medium">{shortcutLabel()}</kbd></button>
+  </div>;
   const foot = <div className="border-t border-gray-100 px-4 py-3 text-xs">
     {db.mode === "local"
       ? <div className="flex items-start gap-1.5 text-amber-800"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>Local test database. Data lives in this browser only.</span></div>
@@ -60,18 +65,20 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
   </div>;
   return (
     <div className="flex min-h-screen bg-gray-50 text-gray-900 print:bg-white">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex print:!hidden">{brand}{nav}{foot}</aside>
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex print:!hidden">{brand}{search}{nav}{foot}</aside>
       {open && <div className="fixed inset-0 z-40 lg:hidden"><div className="absolute inset-0 bg-gray-900/30" onClick={() => setOpen(false)} />
-        <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl">{brand}{nav}{foot}</aside></div>}
+        <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl">{brand}{search}{nav}{foot}</aside></div>}
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-white/80 px-4 backdrop-blur lg:hidden print:hidden">
           <Button variant="ghost" size="icon" onClick={() => setOpen(o => !o)} aria-label="Menu">{open ? <X /> : <Menu />}</Button>
           <span className="text-sm font-semibold">Your Products</span>
-          <Link to="/orders/new" className="ml-auto inline-flex h-8 items-center gap-1 rounded-md bg-indigo-600 px-3 text-xs font-medium text-white"><Plus className="h-3.5 w-3.5" />Order</Link>
+          <Button variant="ghost" size="icon" className="ml-auto" onClick={showCommandPalette} aria-label="Search"><Search /></Button>
+          <Link to="/orders/new" className="inline-flex h-8 items-center gap-1 rounded-md bg-indigo-600 px-3 text-xs font-medium text-white"><Plus className="h-3.5 w-3.5" />Order</Link>
         </header>
         <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8 print:p-0"><div className="mx-auto max-w-[1400px]">
           {Page ? <ParamsProvider value={hit!.params}><Page key={path} /></ParamsProvider> : <NotFound what="This page" back={{ to: "/", label: "Go to the overview" }} />}
         </div></main>
+        <CommandPalette />
       </div>
     </div>
   );
