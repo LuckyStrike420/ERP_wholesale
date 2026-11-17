@@ -56,17 +56,17 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
           <Button variant="ghost" size="sm" className="h-7 px-2" onClick={onSignOut} title="Sign out" aria-label="Sign out"><LogOut className="h-3.5 w-3.5" /></Button></div>}
   </div>;
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-900">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex">{brand}{nav}{foot}</aside>
+    <div className="flex min-h-screen bg-gray-50 text-gray-900 print:bg-white">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex print:!hidden">{brand}{nav}{foot}</aside>
       {open && <div className="fixed inset-0 z-40 lg:hidden"><div className="absolute inset-0 bg-gray-900/30" onClick={() => setOpen(false)} />
         <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl">{brand}{nav}{foot}</aside></div>}
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-white/80 px-4 backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-white/80 px-4 backdrop-blur lg:hidden print:hidden">
           <Button variant="ghost" size="icon" onClick={() => setOpen(o => !o)} aria-label="Menu">{open ? <X /> : <Menu />}</Button>
           <span className="text-sm font-semibold">Your Products</span>
           <Link to="/orders/new" className="ml-auto inline-flex h-8 items-center gap-1 rounded-md bg-indigo-600 px-3 text-xs font-medium text-white"><Plus className="h-3.5 w-3.5" />Order</Link>
         </header>
-        <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1400px]">
+        <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8 print:p-0"><div className="mx-auto max-w-[1400px]">
           {Page ? <ParamsProvider value={hit!.params}><Page key={path} /></ParamsProvider> : <NotFound what="This page" back={{ to: "/", label: "Go to the overview" }} />}
         </div></main>
       </div>

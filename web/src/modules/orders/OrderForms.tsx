@@ -33,16 +33,6 @@ function WithOrder({ children }: { children: (o: any) => React.ReactNode }) {
 }
 const backTo = (o: any) => ({ to: orderPath(o), label: o.pi_number ? `PI ${o.pi_number}` : "Draft order" });
 
-export function OrderNew() {
-  const { db } = useApp();
-  const customers = useRows("customers", { order: [["name", "asc"]] }).rows;
-  if (!customers.length) return <Loading />;
-  return <FormPage title="New order" sub="Deposit % and payment term are taken from the customer." back={{ to: "/orders", label: "Orders" }}
-    fields={orderFields(customers)} initial={{ order_type: "FOB", po_date: today() }} submitLabel="Create order"
-    onSubmit={async v => { const o = await db.insert("sales_orders", { ...v, status: v.pi_number ? "pi_sent" : "draft", pi_date: v.pi_number ? today() : null });
-      return orderPath(o as any, "/lines/new"); }} />;
-}
-
 export function OrderEdit() {
   const { db } = useApp();
   const customers = useRows("customers", { order: [["name", "asc"]] }).rows;

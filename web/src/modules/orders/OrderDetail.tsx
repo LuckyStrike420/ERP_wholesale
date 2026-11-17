@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Ban, ClipboardList, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
+import { AlertTriangle, Ban, ClipboardList, Copy, FileText, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApp, useRows } from "@/app/store";
 import { Link, useParams } from "@/app/router";
@@ -48,6 +48,8 @@ export default function OrderDetail() {
         {STATUS_ORDER.filter(s => s !== "draft" || o.status === "draft").map(s => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}</select>}
       {!["draft", "cancelled"].includes(o.status) && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
       <LinkButton to={`${base}/edit`} variant="outline"><Pencil />Edit</LinkButton>
+      {o.pi_number && <LinkButton to={`${base}/pi`} variant="outline"><FileText />PI (PDF)</LinkButton>}
+      {o.pi_number && <LinkButton to={`/orders/new?from=${encodeURIComponent(o.pi_number)}`} variant="outline"><Copy />Repeat order</LinkButton>}
       {!locked && o.status_rank < 60 && <Button variant="outline" className="text-rose-600" onClick={() => setConfirm({ title: "Cancel this order?", label: "Cancel order",
         body: "The order leaves revenue and open amounts. Payments already received stay visible as customer credit. This cannot be undone.",
         go: () => run(() => db.update("sales_orders", { id: o.id }, { status: "cancelled" }), "Order cancelled") })}><Ban className="h-4 w-4" />Cancel order</Button>}

@@ -47,7 +47,7 @@ export function CustomerDetail() {
     </div>
     <div className="mb-6 grid gap-6 lg:grid-cols-2">
       <Section title="Terms"><KV items={[["EXW", terms(c.exw)], ["FOB", terms(c.fob)]]} /></Section>
-      <Section title="Details"><KV items={[["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section>
+      <Section title="Details"><KV items={[["Address", c.address ? <span className="whitespace-pre-line">{c.address}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section>
     </div>
     <Section title="Orders">
       <DataTable rows={orders} rowTo={o => orderPath(o)} empty="No orders yet" cols={[
@@ -62,6 +62,7 @@ export function CustomerDetail() {
 
 const customerFields: Field[] = [{ name: "name", label: "Customer", required: true }, { name: "country", label: "Country", span: 1 }, { name: "vat_number", label: "VAT number", span: 1 },
   { name: "contact_name", label: "Contact", span: 1 }, { name: "email", label: "E-mail", span: 1 },
+  { name: "address", label: "Address (on the PI)", type: "textarea" },
   { name: "exw_deposit", label: "EXW deposit %", type: "percent", span: 1, section: "Payment terms" }, { name: "exw_days", label: "EXW payment term (days)", type: "number", span: 1, section: "Payment terms" },
   { name: "fob_deposit", label: "FOB deposit %", type: "percent", span: 1, section: "Payment terms" }, { name: "fob_days", label: "FOB payment term (days)", type: "number", span: 1, section: "Payment terms" },
   { name: "notes", label: "Note", type: "textarea", section: "Note" }];

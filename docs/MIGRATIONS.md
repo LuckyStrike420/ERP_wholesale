@@ -17,6 +17,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0011_po_from_order.sql` | `0011_po_from_order` | ja (17 nov 2026) |
 | `0012_rls_once_per_query.sql` | `0012_rls_once_per_query` | ja (17 nov 2026) |
 | `0013_split_write_policies.sql` | — | **nee: wacht op bevestiging in Supabase** |
+| `0014_order_composer.sql` | `0014_order_composer` | ja (17 nov 2026) |
 
 ## Regels
 

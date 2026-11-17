@@ -42,6 +42,8 @@ export function ProductForm() {
   if (slug && !row) return loading ? <Loading /> : <NotFound what="Product" back={{ to: "/products", label: "All products" }} />;
   const fields: Field[] = [{ name: "name", label: "Product", required: true }, { name: "sku", label: "SKU", span: 1 }, { name: "kind", label: "Kind", type: "select", span: 1, options: kinds.map(k => ({ value: k.code, label: k.code })) },
     { name: "default_supplier_id", label: "Supplier", type: "select", options: suppliers.map(s => ({ value: s.id, label: s.name })) },
+    { name: "sale_price_fob", label: "Standard sale price FOB ($)", type: "number", span: 1, section: "Standard sale price", hint: "Used on a new order when no price agreement applies" },
+    { name: "sale_price_exw", label: "Standard sale price EXW (€)", type: "number", span: 1, section: "Standard sale price" },
     ...TYPES.flatMap(t => { const c = t === "FOB" ? "$" : "€"; const k = t.toLowerCase(); return [
       { name: `${k}_basis`, label: `${t} cost basis (${c})`, type: "number", span: 1, section: "Cost rules" }, { name: `${k}_share`, label: `${t} share above basis %`, type: "percent", span: 1, section: "Cost rules" },
       { name: `${k}_royalty`, label: `${t} royalty per piece (${c})`, type: "number", span: 1, section: "Cost rules" }] as Field[]; }),

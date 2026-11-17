@@ -59,3 +59,9 @@
     font-feature-settings: "cv11", "ss01";
   }
 }
+
+@media print {
+  @page { size: A4; margin: 14mm; }
+  body { background: white; }
+  [data-sonner-toaster] { display: none !important; }
+}
