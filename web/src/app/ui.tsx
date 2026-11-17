@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils";
 import { errorText, useApp, useLoading } from "./store";
 import { Link, useNav, usePath } from "./router";
 import { PAYMENT_LABEL, STATUS_LABEL } from "./format";
+import { Combobox } from "./Combobox";
+import { CREATABLE_FIELD, quickCreate } from "./quickCreate";
 
 // ---------------- page structure ----------------
 export function PageHeader({ title, sub, back, children }: { title: ReactNode; sub?: ReactNode; back?: { to: string; label: string }; children?: ReactNode }) {
@@ -171,7 +173,9 @@ export function DataTable<T extends Record<string, any>>({ rows, cols, rowTo, on
 
 // ---------------- forms: always a page of their own ----------------
 export interface Field { name: string; label: string; type?: "text" | "number" | "date" | "select" | "textarea" | "checkbox" | "percent"; options?: { value: string; label: string }[];
-  required?: boolean; hint?: string; span?: 1 | 2; placeholder?: string; section?: string; }
+  required?: boolean; hint?: string; span?: 1 | 2; placeholder?: string; section?: string;
+  /** select: allow any typed text as the value (e.g. a role) */ free?: boolean;
+  /** select on customer_id / supplier_id / product_id: set false to not offer "add new" */ create?: boolean; }
 
 export const selectClass = "h-9 rounded-md border border-gray-300 bg-white px-2.5 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
 
@@ -182,7 +186,7 @@ export function FormPage({ title, sub, back, fields, initial, submitLabel = "Sav
   title: ReactNode; sub?: ReactNode; back: { to: string; label: string }; fields: Field[]; initial?: Record<string, any>; submitLabel?: string;
   onSubmit: (values: Record<string, any>) => Promise<SubmitResult>; aside?: ReactNode; children?: ReactNode; done?: string;
 }) {
-  const nav = useNav(); const { refresh } = useApp();
+  const nav = useNav(); const { refresh, db } = useApp();
   const start = () => Object.fromEntries(fields.map(f => {
     const v = initial?.[f.name];
     return [f.name, f.type === "checkbox" ? !!v : f.type === "percent" && v != null && v !== "" ? String(Math.round(Number(v) * 1e6) / 1e4) : v ?? ""];
@@ -223,8 +227,15 @@ export function FormPage({ title, sub, back, fields, initial, submitLabel = "Sav
                 {g.fields.map(f => (
                   <div key={f.name} className={cn(f.span === 1 ? "col-span-2 sm:col-span-1" : "col-span-2")}>
                     {f.type !== "checkbox" && <Label htmlFor={f.name} className="mb-1.5 block text-sm font-medium text-gray-700">{f.label}{f.required && <span className="text-rose-600"> *</span>}</Label>}
-                    {f.type === "select" ? <select id={f.name} className={selectClass + " w-full"} value={v[f.name] ?? ""} onChange={e => set(f.name, e.target.value)}>
-                        <option value="">–</option>{f.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+                    {f.type === "select" ? (() => {
+                        // a list you can type in: for records (customer, supplier, product …), longer lists and free text; short fixed lists stay a plain menu
+                        const kind = f.create === false ? undefined : CREATABLE_FIELD[f.name];
+                        if (kind || f.free || (f.options?.length ?? 0) > 6)
+                          return <Combobox id={f.name} label={f.label} value={v[f.name] || null} onChange={x => set(f.name, x ?? "")} options={f.options ?? []} required={f.required} free={f.free}
+                            create={kind ? async t => { const id = await quickCreate(db, kind, t); refresh(); return id; } : undefined} createNoun={kind} />;
+                        return <select id={f.name} className={selectClass + " w-full"} value={v[f.name] ?? ""} onChange={e => set(f.name, e.target.value)}>
+                          <option value="">–</option>{f.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>;
+                      })()
                       : f.type === "textarea" ? <Textarea id={f.name} rows={3} value={v[f.name]} onChange={e => set(f.name, e.target.value)} className="border-gray-300" />
                       : f.type === "checkbox" ? <label className="flex items-center gap-2 text-sm text-gray-800"><input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-indigo-600" checked={!!v[f.name]} onChange={e => set(f.name, e.target.checked)} />{f.label}</label>
                       : <Input id={f.name} type={f.type === "date" ? "date" : "text"} inputMode={f.type === "number" || f.type === "percent" ? "decimal" : undefined}

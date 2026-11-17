@@ -13,6 +13,7 @@ import { orderPath } from "@/app/paths";
 import { DataTable, LinkButton, PageHeader, PaymentPill, Section, StatusPill, selectClass } from "@/app/ui";
 import { date, days, money, marginPct, PAYMENT_LABEL, STATUS_LABEL, STATUS_ORDER } from "@/app/format";
 import { cn } from "@/lib/utils";
+import { Combobox } from "@/app/Combobox";
 
 const FILTER_KEYS = ["status", "type", "customer", "payment", "q"];
 
@@ -60,7 +61,7 @@ export default function OrdersList() {
         <option value="open">Open orders</option><option value="unpaid">With an open amount</option><option value="overdue">Overdue or reminder</option><option value="all">All orders</option>
         {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       <select aria-label="Type" className={selectClass + " w-32"} value={type} onChange={e => set("type", e.target.value)}><option value="">EXW + FOB</option><option>EXW</option><option>FOB</option></select>
-      <select aria-label="Customer" className={selectClass + " w-52"} value={customer} onChange={e => set("customer", e.target.value)}><option value="">All customers</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+      <Combobox label="Customer" className="w-52" value={customer || null} onChange={v => set("customer", v ?? "")} placeholder="All customers" options={customers.map(c => ({ value: c.id, label: c.name }))} />
       <select aria-label="Payment" className={selectClass + " w-40"} value={payment} onChange={e => set("payment", e.target.value)}><option value="">Any payment</option>
         {Object.entries(PAYMENT_LABEL).filter(([k]) => k !== "draft").map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       {filterQuery && <button type="button" onClick={() => go(new URLSearchParams(view === "board" ? "view=board" : ""))} className="text-xs font-medium text-gray-500 hover:text-gray-900">Clear filters</button>}

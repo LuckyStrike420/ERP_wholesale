@@ -49,7 +49,7 @@ function ContactForm({ party }: { party: Party }) {
   const c = id ? byShort(contacts.rows, id) : undefined;
   if (id && !c) return contacts.loading ? <Loading /> : <NotFound what="Contact" back={{ to: partyPath(party, p), label: p.name }} />;
   const fields: Field[] = [
-    { name: "name", label: "Name", required: true }, { name: "role", label: "Role", type: "select", span: 1, options: ROLES.map(r => ({ value: r, label: r })) },
+    { name: "name", label: "Name", required: true }, { name: "role", label: "Role", type: "select", span: 1, free: true, options: ROLES.map(r => ({ value: r, label: r })), hint: "Pick one or type your own" },
     { name: "is_primary", label: "Main contact (shown on documents)", type: "checkbox", span: 1 },
     { name: "email", label: "E-mail", span: 1 }, { name: "phone", label: "Phone", span: 1 }, { name: "notes", label: "Note", type: "textarea" }];
   return <>

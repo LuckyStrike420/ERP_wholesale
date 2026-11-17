@@ -16,6 +16,8 @@ import { findOrder, orderPath } from "@/app/paths";
 import { Loading, Notice, PageHeader, Pill, Section, selectClass } from "@/app/ui";
 import { date, money, pct, qty, SOURCE_LABEL, termText, today } from "@/app/format";
 import { cn } from "@/lib/utils";
+import { Combobox } from "@/app/Combobox";
+import { quickCreate } from "@/app/quickCreate";
 
 type Line = { key: number; product_id: string; quantity: string; unit_price: string; batch_item_id: string;
   touched: boolean; source: string | null; suggestion: { price: number; source: string; moq: number | null } | null };
@@ -139,8 +141,9 @@ export default function OrderComposer() {
           <div className="grid grid-cols-2 gap-x-5 gap-y-4 px-5 py-5 md:grid-cols-4">
             <div className="col-span-2">
               <Label htmlFor="customer" className="mb-1.5 block text-sm font-medium text-gray-700">Customer <span className="text-rose-600">*</span></Label>
-              <select id="customer" className={selectClass + " w-full"} value={h.customer_id} onChange={e => pickCustomer(e.target.value)}>
-                <option value="">Choose…</option>{customers.rows.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+              <Combobox id="customer" label="Customer" required value={h.customer_id || null} onChange={v => pickCustomer(v ?? "")} placeholder="Type a customer…"
+                options={customers.rows.map(c => ({ value: c.id, label: c.name, hint: c.country ?? undefined }))}
+                create={async t => { const id = await quickCreate(db, "customer", t); refresh(); return id; }} createNoun="customer" />
               {h.customer_id && <p className="mt-1.5 text-xs text-gray-500">{payTerm ? payTerm.name : term ? `${pct(term.deposit_pct, 0)} deposit` : "No payment term for this type"}
                 {lastOrder && <> · last order <Link to={orderPath(lastOrder)} className="text-indigo-600 hover:underline">PI {lastOrder.pi_number ?? "draft"}</Link> on {date(lastOrder.po_date)}</>}</p>}
             </div>
@@ -176,8 +179,10 @@ export default function OrderComposer() {
                 const differs = l.suggestion && num(l.unit_price) !== l.suggestion.price;
                 return <tr key={l.key} className="border-b border-gray-100 align-top last:border-0">
                   <td className="px-4 py-2.5">
-                    <select aria-label="Product" className={selectClass + " w-full min-w-48"} value={l.product_id} onChange={e => setLine(l.key, { product_id: e.target.value, touched: false, source: null, unit_price: "", suggestion: null, batch_item_id: "" })}>
-                      <option value="">Choose product…</option>{products.rows.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+                    <Combobox label="Product" className="min-w-48" value={l.product_id || null} placeholder="Type a product…"
+                      onChange={v => setLine(l.key, { product_id: v ?? "", touched: false, source: null, unit_price: "", suggestion: null, batch_item_id: "" })}
+                      options={products.rows.map(x => ({ value: x.id, label: x.name, hint: x.sku ?? undefined, keywords: x.sku ?? "" }))}
+                      create={async t => { const id = await quickCreate(db, "product", t); refresh(); return id; }} createNoun="product" />
                     {l.product_id && prod[l.product_id]?.sku && <div className="mt-1 text-xs text-gray-400">SKU {prod[l.product_id].sku}</div>}
                   </td>
                   <td className="px-2 py-2.5"><Input aria-label="Quantity" inputMode="decimal" value={l.quantity} onChange={e => setLine(l.key, { quantity: e.target.value })} className="h-9 border-gray-300 text-right" />
