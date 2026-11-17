@@ -19,6 +19,9 @@ export function createSupabaseClient(url: string, key: string): DataClient & { a
     async update(table, match, patch) { ok(await sb.from(table).update(patch).match(match)); },
     async remove(table, match) { ok(await sb.from(table).delete().match(match)); },
     async rpc(fn, args = {}) { return ok(await sb.rpc(fn, args)) as any; },
+    async uploadFile(path, file) { ok(await sb.storage.from("documents").upload(path, file, { contentType: file.type || undefined, upsert: false }) as any); },
+    async fileUrl(path) { return (ok(await sb.storage.from("documents").createSignedUrl(path, 300) as any) as any).signedUrl; },
+    async removeFile(path) { ok(await sb.storage.from("documents").remove([path]) as any); },
     async session() {
       const { data } = await sb.auth.getSession(); const u = data.session?.user;
       if (!u) return null;

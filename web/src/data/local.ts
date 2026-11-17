@@ -38,6 +38,8 @@ async function build(db: PGlite, empty = false) {
     if (seed.rows[t]?.length) await db.query(`insert into ${id(t)} select * from jsonb_populate_recordset(null::${id(t)}, $1::jsonb)`, [JSON.stringify(seed.rows[t])]);
   }
   await db.exec("set session_replication_role = origin");
+  // the imported customer terms get the payment term with the same deposit % (as migration 0015 did on Supabase)
+  await db.exec("select link_payment_terms()");
 }
 
 export async function createLocalClient(): Promise<DataClient> {
@@ -88,6 +90,17 @@ export async function createLocalClient(): Promise<DataClient> {
       if (r.fields.length === 1 && r.fields[0].name === fn) return (r.rows[0]?.[fn] ?? null) as any;
       return r.rows as any;
     },
+    // files stay in this browser, next to the test data; a reset throws them away together
+    async uploadFile(path, file) {
+      await db.exec("create table if not exists public.local_files (path text primary key, mime text, data bytea not null)");
+      await db.query("insert into public.local_files (path, mime, data) values ($1, $2, $3)", [path, file.type || null, new Uint8Array(await file.arrayBuffer())]);
+    },
+    async fileUrl(path) {
+      const r = (await db.query<{ mime: string | null; data: Uint8Array }>("select mime, data from public.local_files where path = $1", [path])).rows[0];
+      if (!r) throw new Error("This file is not in this browser (it was added elsewhere)");
+      return URL.createObjectURL(new Blob([r.data as BlobPart], { type: r.mime ?? "application/octet-stream" }));
+    },
+    async removeFile(path) { if ((await db.query<{ t: string | null }>("select to_regclass('public.local_files')::text as t")).rows[0].t) await db.query("delete from public.local_files where path = $1", [path]); },
     async session() { return { email: "local test database", name: "Local admin", role: "admin" }; },
     async reset(empty) { await build(db, empty); },
     async importWorkbook(data, fileName, commit) {

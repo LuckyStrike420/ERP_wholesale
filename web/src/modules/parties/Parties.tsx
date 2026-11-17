@@ -3,24 +3,28 @@
  */
 import { Pencil, Plus } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
-import { useParams } from "@/app/router";
+import { Link, useParams } from "@/app/router";
 import { bySlug, customerPath, orderPath, poPath, supplierPath } from "@/app/paths";
 import { DataTable, FormPage, KV, LinkButton, Loading, NotFound, PageHeader, PaymentPill, Section, Stat, StatusPill, type Field } from "@/app/ui";
-import { date, money, pct } from "@/app/format";
+import { date, money, pct, termText } from "@/app/format";
+import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
+import { DocumentsSection } from "@/modules/documents/Documents";
 
 // ---------------- customers ----------------
 function useCustomers() {
   const customers = useRows("customers", { order: [["name", "asc"]] }); const terms = useRows("customer_terms").rows; const summary = useRows("v_customer_summary").rows;
-  const t = (id: string, type: string) => terms.find(x => x.customer_id === id && x.order_type === type);
+  const pts = useRows("payment_terms").rows;
+  const t = (id: string, type: string) => { const x = terms.find(y => y.customer_id === id && y.order_type === type); return x && { ...x, term: pts.find(p => p.id === x.payment_term_id) }; };
   const s = (id: string, cur: string) => summary.find(x => x.customer_id === id && x.currency === cur);
   return { loading: customers.loading, rows: customers.rows.map(c => ({ ...c, exw: t(c.id, "EXW"), fob: t(c.id, "FOB"), eur: s(c.id, "EUR"), usd: s(c.id, "USD") })) };
 }
-const terms = (x: any) => x ? `${pct(x.deposit_pct, 0)} deposit · ${x.payment_days} days` : "–";
+const terms = (x: any) => !x ? "–" : x.term ? x.term.name : `${pct(x.deposit_pct, 0)} deposit · ${x.payment_days} days`;
+const termLine = (x: any) => !x ? "–" : x.term ? <div><div className="text-gray-900">{x.term.name}</div><div className="text-xs text-gray-500">{termText(x.term)}</div></div> : terms(x);
 
 export function Customers() {
   const { rows } = useCustomers();
   return <>
-    <PageHeader title="Customers" sub="One record per customer, with deposit and payment term per order type."><LinkButton to="/customers/new"><Plus />New customer</LinkButton></PageHeader>
+    <PageHeader title="Customers" sub="One record per customer, with a payment term per order type."><LinkButton to="/customers/new"><Plus />New customer</LinkButton></PageHeader>
     <Section><DataTable rows={rows} search exportName="customers" rowTo={c => customerPath(c)} cols={[
       { key: "name", header: "Customer", render: c => <div><div className="font-semibold text-gray-900">{c.name}</div><div className="text-xs text-gray-500">{[c.country, c.contact_name].filter(Boolean).join(" · ")}</div></div> },
       { key: "exw", header: "EXW terms", value: c => c.exw?.deposit_pct, render: c => terms(c.exw) },
@@ -46,7 +50,7 @@ export function CustomerDetail() {
       {cur.map(x => <Stat key={"v" + x.currency} label={`Order value ${x.currency}`} value={money(x.order_value, x.currency)} hint={`margin ${money(x.margin, x.currency)}`} />)}
     </div>
     <div className="mb-6 grid gap-6 lg:grid-cols-2">
-      <Section title="Terms"><KV items={[["EXW", terms(c.exw)], ["FOB", terms(c.fob)]]} /></Section>
+      <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)]]} /></Section>
       <Section title="Details"><KV items={[["Address", c.address ? <span className="whitespace-pre-line">{c.address}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section>
     </div>
     <Section title="Orders">
@@ -57,30 +61,41 @@ export function CustomerDetail() {
         { key: "outstanding", header: "Outstanding", align: "right", render: o => money(o.outstanding, o.currency) },
         { key: "payment_status", header: "Payment", render: o => <PaymentPill status={o.payment_status} /> }]} />
     </Section>
+    <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <TasksSection eq={{ customer_id: c.id }} hide={["customer"]} newLink={newTaskPath({ customer: slug, back: customerPath(c) })} />
+      <DocumentsSection entity="customers" id={c.id} />
+    </div>
   </>;
 }
 
 const customerFields: Field[] = [{ name: "name", label: "Customer", required: true }, { name: "country", label: "Country", span: 1 }, { name: "vat_number", label: "VAT number", span: 1 },
   { name: "contact_name", label: "Contact", span: 1 }, { name: "email", label: "E-mail", span: 1 },
   { name: "address", label: "Address (on the PI)", type: "textarea" },
-  { name: "exw_deposit", label: "EXW deposit %", type: "percent", span: 1, section: "Payment terms" }, { name: "exw_days", label: "EXW payment term (days)", type: "number", span: 1, section: "Payment terms" },
-  { name: "fob_deposit", label: "FOB deposit %", type: "percent", span: 1, section: "Payment terms" }, { name: "fob_days", label: "FOB payment term (days)", type: "number", span: 1, section: "Payment terms" },
   { name: "notes", label: "Note", type: "textarea", section: "Note" }];
 
 export function CustomerForm() {
   const { slug } = useParams(); const { db } = useApp(); const { rows, loading } = useCustomers();
+  const pts = useRows("payment_terms", { order: [["deposit_pct", "desc"], ["name", "asc"]] });
   const row = slug ? bySlug(rows, slug) : undefined;
   if (slug && !row) return loading ? <Loading /> : <NotFound what="Customer" back={{ to: "/customers", label: "All customers" }} />;
-  return <FormPage title={row ? `Edit ${row.name}` : "New customer"} sub="New terms apply to new orders; existing orders keep the terms they were created with."
-    back={row ? { to: customerPath(row), label: row.name } : { to: "/customers", label: "Customers" }} fields={customerFields}
-    initial={row ? { ...row, exw_deposit: row.exw?.deposit_pct, exw_days: row.exw?.payment_days, fob_deposit: row.fob?.deposit_pct, fob_days: row.fob?.payment_days } : { exw_deposit: 1, exw_days: 0, fob_deposit: 0.3, fob_days: 0 }}
+  if (pts.loading && !pts.rows.length) return <Loading />;
+  // inactive terms are only offered when the customer still has one
+  const opts = (current?: string) => pts.rows.filter(t => t.active || t.id === current).map(t => ({ value: t.id, label: `${t.name} (${termText(t)})` }));
+  const named = (n: string) => pts.rows.find(t => t.name === n)?.id;
+  const fields: Field[] = [...customerFields.slice(0, -1),
+    { name: "exw_term", label: "EXW payment term", type: "select", options: opts(row?.exw?.payment_term_id), section: "Payment terms" },
+    { name: "fob_term", label: "FOB payment term", type: "select", options: opts(row?.fob?.payment_term_id), section: "Payment terms", hint: "Terms are managed under Admin → Payment terms." },
+    customerFields[customerFields.length - 1]];
+  return <FormPage title={row ? `Edit ${row.name}` : "New customer"} sub="A new term applies to new orders; existing orders keep the term they were created with (change it on the order)."
+    back={row ? { to: customerPath(row), label: row.name } : { to: "/customers", label: "Customers" }} fields={fields}
+    initial={row ? { ...row, exw_term: row.exw?.payment_term_id, fob_term: row.fob?.payment_term_id } : { exw_term: named("100% payment"), fob_term: named("30% deposit / 70% balance") }}
     onSubmit={async v => {
-      const { exw_deposit, exw_days, fob_deposit, fob_days, ...c } = v;
+      const { exw_term, fob_term, ...c } = v;
       const id = row ? (await db.update("customers", { id: row.id }, c), row.id) : (await db.insert("customers", c)).id;
-      for (const [type, dep, d] of [["EXW", exw_deposit, exw_days], ["FOB", fob_deposit, fob_days]] as const) {
-        const body = { deposit_pct: dep ?? 0, payment_days: d ?? 0 };
-        if (row?.[type.toLowerCase()]) await db.update("customer_terms", { customer_id: id, order_type: type }, body);
-        else await db.insert("customer_terms", { customer_id: id, order_type: type, ...body });
+      for (const [type, term] of [["EXW", exw_term], ["FOB", fob_term]] as const) {
+        if (!term) continue;
+        if (row?.[type.toLowerCase()]) await db.update("customer_terms", { customer_id: id, order_type: type }, { payment_term_id: term });
+        else await db.insert("customer_terms", { customer_id: id, order_type: type, payment_term_id: term });
       }
       return customerPath({ name: c.name });
     }} />;
@@ -126,6 +141,10 @@ export function SupplierDetail() {
         { key: "po_date", header: "PO date", render: p => date(p.po_date) }, { key: "payable", header: "To pay", align: "right", render: p => money(p.payable, p.currency) },
         { key: "outstanding", header: "Outstanding", align: "right", render: p => money(p.outstanding, p.currency) }]} />
     </Section>
+    <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <TasksSection eq={{ supplier_id: s.id }} hide={["supplier"]} newLink={newTaskPath({ supplier: slug, back: supplierPath(s) })} />
+      <DocumentsSection entity="suppliers" id={s.id} />
+    </div>
   </>;
 }
 

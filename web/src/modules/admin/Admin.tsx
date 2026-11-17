@@ -16,14 +16,14 @@ const changed = (a: any) => {
   const keys = Object.keys(a.new_data ?? {}).filter(k => JSON.stringify(a.new_data[k]) !== JSON.stringify(a.old_data?.[k]));
   return keys.map(k => `${k}: ${a.old_data?.[k] ?? "–"} → ${a.new_data[k] ?? "–"}`).join("; ");
 };
-const Head = () => <>
-  <PageHeader title="Admin" sub="Settings, exchange rates, users, the audit log and the workbook import." />
-  <TabLinks tabs={[{ to: "/admin", label: "Settings" }, { to: "/admin/rates", label: "Exchange rates" }, { to: "/admin/users", label: "Users" }, { to: "/admin/audit", label: "Audit log" }, { to: "/admin/import", label: "Import" }]} />
+export const AdminHead = () => <>
+  <PageHeader title="Admin" sub="Settings, payment terms, exchange rates, users, the audit log and the workbook import." />
+  <TabLinks tabs={[{ to: "/admin", label: "Settings" }, { to: "/admin/payment-terms", label: "Payment terms" }, { to: "/admin/rates", label: "Exchange rates" }, { to: "/admin/users", label: "Users" }, { to: "/admin/audit", label: "Audit log" }, { to: "/admin/import", label: "Import" }]} />
 </>;
 
 export function Settings() {
   const settings = useRows("app_settings", { order: [["key", "asc"]] }).rows;
-  return <><Head /><Section title="Calculation settings" sub="Click a setting to change it. You see the effect before it is saved.">
+  return <><AdminHead /><Section title="Calculation settings" sub="Click a setting to change it. You see the effect before it is saved.">
     <DataTable rows={settings.map(s => ({ ...s, id: s.key }))} rowTo={r => `/admin/settings/${r.key}`}
       cols={[{ key: "description", header: "Setting", render: r => <span className="text-gray-900">{r.description}</span> }, { key: "value", header: "Value", align: "right", render: r => <span className="font-semibold text-gray-900">{r.value}</span> },
         { key: "key", header: "Key", render: r => <code className="text-xs text-gray-500">{r.key}</code> }]} />
@@ -53,7 +53,7 @@ export function SettingForm() {
 
 export function Rates() {
   const rates = useRows("fx_rates", { order: [["rate_date", "desc"]] }).rows;
-  return <><Head /><Section title="Exchange rates for the combined EUR total" action={<LinkButton size="sm" to="/admin/rates/new"><Plus />Add rate</LinkButton>}>
+  return <><AdminHead /><Section title="Exchange rates for the combined EUR total" action={<LinkButton size="sm" to="/admin/rates/new"><Plus />Add rate</LinkButton>}>
     <DataTable rows={rates.map(r => ({ ...r, id: r.rate_date + r.currency }))} empty="No rates yet: reports show EUR and USD separately, without a combined total"
       cols={[{ key: "rate_date", header: "From date", render: r => date(r.rate_date) }, { key: "currency", header: "Currency" },
         { key: "rate", header: "1 unit in EUR", align: "right", render: r => money(r.rate, null, 4) }, { key: "source", header: "Source" }]} />
@@ -70,7 +70,7 @@ export function RateNew() {
 
 export function Users() {
   const { db } = useApp(); const profiles = useRows("profiles").rows;
-  return <><Head /><Section title="Users and roles">
+  return <><AdminHead /><Section title="Users and roles">
     {db.mode === "local" && <p className="border-b bg-amber-50 px-5 py-2.5 text-sm text-amber-900">The local test database has no sign-in: you work as admin.</p>}
     <DataTable rows={profiles.map(p => ({ ...p, id: p.user_id }))} empty="No users yet" rowTo={db.mode === "supabase" ? r => `/admin/users/${String(r.user_id).slice(0, 8)}` : undefined}
       cols={[{ key: "full_name", header: "Name", render: r => <span className="text-gray-900">{r.full_name ?? "–"}</span> }, { key: "role", header: "Role", render: r => <Pill tone="blue">{r.role}</Pill> }, { key: "user_id", header: "User id", render: r => <code className="text-xs text-gray-500">{r.user_id}</code> }]} />
@@ -88,7 +88,7 @@ export function UserForm() {
 
 export function Audit() {
   const audit = useRows("audit_log", { order: [["id", "desc"]], limit: 300 }).rows;
-  return <><Head /><Section title="Audit log, latest 300 changes">
+  return <><AdminHead /><Section title="Audit log, latest 300 changes">
     <DataTable rows={audit} search exportName="audit-log" dense
       cols={[{ key: "changed_at", header: "When", render: a => dateTime(a.changed_at), width: "9.5rem" }, { key: "table_name", header: "Record" }, { key: "action", header: "Action" },
         { key: "change", header: "Change", value: changed, render: a => <span className="break-all text-xs">{changed(a)}</span> }]} />
@@ -108,7 +108,7 @@ export function Import() {
   };
   const failed = imp?.result.reconciliation.filter(r => !r.ok) ?? [];
   const issueCols = [{ key: "severity", header: "", render: (r: any) => <SeverityPill s={r.severity} /> }, { key: "sheet", header: "Sheet" }, { key: "row_no", header: "Row", align: "right" as const }, { key: "message", header: "Remark" }];
-  return <><Head />
+  return <><AdminHead />
     <Section title="Import the Excel workbook">
       {db.mode === "supabase"
         ? <p className="px-5 py-4 text-sm text-gray-700">On Supabase the import runs from the command line, in one transaction: <code>npm run import -- --file workbook.xlsx</code> shows the dry run, adding <code>--commit</code> saves it.</p>

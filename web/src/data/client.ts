@@ -14,6 +14,10 @@ export interface DataClient {
   remove(table: string, match: Row): Promise<void>;
   /** scalar functions return the value, table functions return rows */
   rpc<T = any>(fn: string, args?: Row): Promise<T>;
+  /** files (documents): a private bucket on Supabase, the browser database in local mode */
+  uploadFile(path: string, file: File): Promise<void>;
+  fileUrl(path: string): Promise<string>;
+  removeFile(path: string): Promise<void>;
   /** who is using the app. Local test database: always the admin. Supabase: the signed-in user, null when signed out. */
   session(): Promise<Session | null>;
   signIn?(email: string, password: string): Promise<void>;

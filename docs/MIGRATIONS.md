@@ -18,6 +18,8 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0012_rls_once_per_query.sql` | `0012_rls_once_per_query` | ja (17 nov 2026) |
 | `0013_split_write_policies.sql` | `split_write_policies` | ja (17 nov 2026) |
 | `0014_order_composer.sql` | `0014_order_composer` | ja (17 nov 2026) |
+| `0015_payment_terms.sql` | `0015_payment_terms` | ja (17 nov 2026) |
+| `0016_tasks_notes_documents.sql` | `0016_tasks_notes_documents` (plus opslagbucket `documents`) | ja (17 nov 2026) |
 
 ## Regels
 

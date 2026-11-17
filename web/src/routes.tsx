@@ -16,6 +16,8 @@ import { PriceForm, Prices, ProductForm, Products } from "@/modules/catalog/Cata
 import { BatchItemNew, BatchNew, ShipmentForm, Shipping, Stock, StockCorrection } from "@/modules/logistics/Logistics";
 import Reports from "@/modules/reports/Reports";
 import { Audit, Import, RateNew, Rates, SettingForm, Settings, UserForm, Users } from "@/modules/admin/Admin";
+import { PaymentTermForm, PaymentTerms } from "@/modules/admin/PaymentTerms";
+import { TaskForm, Tasks } from "@/modules/tasks/Tasks";
 
 export interface Route { path: string; section: string; page: ComponentType }
 const r = (path: string, section: string, page: ComponentType): Route => ({ path, section, page });
@@ -29,6 +31,7 @@ export const ROUTES: Route[] = [
   r("/orders/:ref/correction", "orders", OrderCorrection), r("/orders/:ref/purchase-order", "orders", OrderPurchaseOrder), r("/orders/:ref/pi", "orders", ProformaInvoice), r("/orders/:ref/write-off", "orders", OrderWriteOff),
   r("/payments", "payments", ToReceive), r("/payments/suppliers", "payments", ToPay), r("/payments/ledger", "payments", Ledger),
   r("/payments/:id/void", "payments", VoidPayment),
+  r("/tasks", "tasks", Tasks), r("/tasks/new", "tasks", TaskForm), r("/tasks/:id", "tasks", TaskForm),
   r("/purchasing", "purchasing", PurchaseOrders), r("/purchasing/new", "purchasing", PurchaseOrderNew),
   r("/purchasing/:po", "purchasing", PurchaseOrderDetail), r("/purchasing/:po/edit", "purchasing", PurchaseOrderEdit),
   r("/purchasing/:po/payment", "purchasing", PurchaseOrderPayment), r("/purchasing/:po/invoice", "purchasing", PurchaseOrderInvoice),
@@ -44,6 +47,7 @@ export const ROUTES: Route[] = [
   r("/reports", "reports", () => <Reports tab="customers" />), r("/reports/suppliers", "reports", () => <Reports tab="suppliers" />),
   r("/reports/monthly", "reports", () => <Reports tab="monthly" />), r("/reports/products", "reports", () => <Reports tab="products" />),
   r("/reports/cash-flow", "reports", () => <Reports tab="cash-flow" />),
-  r("/admin", "admin", Settings), r("/admin/settings/:key", "admin", SettingForm), r("/admin/rates", "admin", Rates), r("/admin/rates/new", "admin", RateNew),
+  r("/admin", "admin", Settings), r("/admin/settings/:key", "admin", SettingForm),
+  r("/admin/payment-terms", "admin", PaymentTerms), r("/admin/payment-terms/new", "admin", PaymentTermForm), r("/admin/payment-terms/:id", "admin", PaymentTermForm), r("/admin/rates", "admin", Rates), r("/admin/rates/new", "admin", RateNew),
   r("/admin/users", "admin", Users), r("/admin/users/:id", "admin", UserForm), r("/admin/audit", "admin", Audit), r("/admin/import", "admin", Import),
 ];

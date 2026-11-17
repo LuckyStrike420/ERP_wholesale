@@ -4,7 +4,7 @@ import { useApp, useRows } from "@/app/store";
 import { useParams } from "@/app/router";
 import { orderPath } from "@/app/paths";
 import { FormPage, KV, Loading, NotFound, PageHeader, Pill, Section, type Field } from "@/app/ui";
-import { date, money, SOURCE_LABEL, today } from "@/app/format";
+import { date, money, SOURCE_LABEL, termText, today } from "@/app/format";
 import { useOrder } from "./data";
 
 const TYPE_OPTIONS = [{ value: "EXW", label: "EXW (euro)" }, { value: "FOB", label: "FOB (dollar)" }];
@@ -40,16 +40,22 @@ export function OrderEdit() {
 }
 function OrderEditForm({ o, customers, db }: { o: any; customers: any[]; db: any }) {
   const raw = useRows("sales_orders", { eq: { id: o.id } }).rows[0];
-  if (!raw || !customers.length) return <Loading />;
+  const terms = useRows("payment_terms", { order: [["deposit_pct", "desc"], ["name", "asc"]] });
+  if (!raw || !customers.length || (terms.loading && !terms.rows.length)) return <Loading />;
   const locked = ["completed", "cancelled"].includes(o.status);
   const fields: Field[] = [...orderFields(customers).filter(f => !locked || f.name === "customer_po").map(f => ({ ...f, section: "Order" })),
     ...(locked ? [] : [{ name: "pi_date", label: "PI sent on", type: "date", span: 1 },
-      { name: "deposit_pct", label: "Deposit %", type: "percent", span: 1, section: "Payment terms" }, { name: "payment_days", label: "Payment term (days after invoice)", type: "number", span: 1, section: "Payment terms" },
-      { name: "deposit_due_date", label: "Deposit due date", type: "date", span: 1, section: "Payment terms" },
-      { name: "balance_due_date", label: "Balance due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = the rule for the order type (FOB: before ETA, EXW: invoice date + term)" }] as Field[]),
+      { name: "payment_term_id", label: "Payment term", type: "select", section: "Payment terms",
+        options: terms.rows.filter(t => t.active || t.id === raw.payment_term_id).map(t => ({ value: t.id, label: `${t.name} (${termText(t)})` })),
+        hint: "Another term also changes the deposit %, and a deposit already fixed on the PI is recalculated." },
+      { name: "deposit_pct", label: "Deposit % (exception)", type: "percent", span: 1, section: "Payment terms", hint: "Leave as it is to follow the term" },
+      { name: "deposit_due_date", label: "Deposit due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = from the payment term" },
+      { name: "balance_due_date", label: "Balance due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = from the payment term" }] as Field[]),
     { name: "notes", label: "Note", type: "textarea", section: "Note" }];
   return <FormPage title={`Edit ${o.pi_number ? `PI ${o.pi_number}` : "draft order"}`} back={backTo(o)} fields={fields} initial={raw} aside={<OrderAside o={o} />}
     onSubmit={async v => { const patch = { ...v }; if (raw.status === "draft" && v.pi_number) patch.status = "pi_sent";
+      // a new term brings its own deposit %: only send the % when it was changed by hand
+      if (patch.payment_term_id !== raw.payment_term_id && Number(patch.deposit_pct) === Number(raw.deposit_pct)) delete patch.deposit_pct;
       await db.update("sales_orders", { id: o.id }, patch); return orderPath({ ...o, pi_number: v.pi_number ?? o.pi_number }); }} />;
 }
 

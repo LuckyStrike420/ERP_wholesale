@@ -6,13 +6,14 @@
  *   /payments/:id/void   void a payment (keeps it in the history)
  */
 import { useMemo } from "react";
-import { Clock, Receipt } from "lucide-react";
+import { BellPlus, Clock, Receipt } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
 import { Link, useNav, useParams, useQuery } from "@/app/router";
 import { byShort, orderPath, poPath } from "@/app/paths";
 import { DataTable, FormPage, Loading, NotFound, Notice, PageHeader, Pill, Section, StatusPill, TabLinks, selectClass } from "@/app/ui";
 import { BUCKET_LABEL, BUCKET_TONE, date, dateShort, days, money } from "@/app/format";
 import { cn } from "@/lib/utils";
+import { newTaskPath, taskPath } from "@/modules/tasks/Tasks";
 
 const ORDER = ["overdue", "reminder", "due_soon", "no_due_date", "scheduled"];
 const RANK: Record<string, number> = Object.fromEntries(ORDER.map((b, i) => [b, i]));
@@ -38,6 +39,9 @@ export function OpenItems({ direction }: { direction: "in" | "out" }) {
   const totals = useRows("v_open_items_totals", { eq: { direction } }).rows;
   const summary = useRows("v_open_items_summary", { eq: { direction } }).rows;
   const count = (b: string) => summary.filter(s => s.bucket === b && (!cur || s.currency === cur)).reduce((a, s) => a + Number(s.items), 0);
+  // open tasks per order / PO, so you see whether someone is already chasing it
+  const tasks = useRows("v_tasks", { eq: { status: "open" } }).rows;
+  const taskFor = (r: any) => tasks.filter(t => direction === "in" ? t.sales_order_id === r.id : t.purchase_order_id === r.id).sort((a, b) => String(a.due_date ?? "9").localeCompare(String(b.due_date ?? "9")))[0];
   const rows = useMemo(() => items.rows.filter(r => (!bucket || r.bucket === bucket) && (!cur || r.currency === cur))
     .sort((a, b) => RANK[a.bucket] - RANK[b.bucket] || Number(b.days_late ?? 0) - Number(a.days_late ?? 0) || Number(b.days_open ?? -1) - Number(a.days_open ?? -1)),
     [items.rows, bucket, cur]);
@@ -88,7 +92,13 @@ export function OpenItems({ direction }: { direction: "in" | "out" }) {
           { key: "days", header: "Late / open", value: r => r.days_late ?? -1, render: r => r.days_late ? <span className="font-semibold text-rose-600">{days(r.days_late)} late</span>
               : r.days_open != null ? <span className={cn("inline-flex items-center gap-1", Number(r.days_open) > 60 ? "font-medium text-amber-700" : "text-gray-600")}><Clock className="h-3 w-3" />{days(r.days_open)}</span>
               : <span className="text-gray-400">date unknown</span> },
-          { key: "act", header: "", render: r => <Link to={pathOf(r) + "/payment"} className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:border-indigo-300 hover:text-indigo-600"><Receipt className="h-3.5 w-3.5" />Payment</Link> },
+          { key: "act", header: "", render: r => { const t = taskFor(r); const part = r.next_due_part === "deposit" ? "deposit" : "payment";
+              return <div className="flex flex-col items-end gap-1">
+                <Link to={pathOf(r) + "/payment"} className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:border-indigo-300 hover:text-indigo-600"><Receipt className="h-3.5 w-3.5" />Payment</Link>
+                {t ? <Link to={taskPath(t)} title={t.title} className="text-xs text-gray-500 hover:text-indigo-600">task {t.due_date ? dateShort(t.due_date) : "open"}</Link>
+                  : <Link to={newTaskPath({ ...(isIn ? { order: r.reference } : { po: r.reference }), title: isIn ? `Chase ${part} PI ${r.reference} (${r.party})` : `Pay ${part} PO ${r.reference} (${r.party})`, due: r.next_due_date, back: isIn ? "/payments" : "/payments/suppliers" })}
+                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600"><BellPlus className="h-3 w-3" />add task</Link>}
+              </div>; } },
         ]} />
     </Section>
   </>;

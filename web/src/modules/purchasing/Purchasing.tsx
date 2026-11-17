@@ -7,6 +7,8 @@ import { Link, useParams } from "@/app/router";
 import { orderPath, poPath, supplierPath } from "@/app/paths";
 import { DataTable, FormPage, KV, LinkButton, Loading, NotFound, PageHeader, Pill, Section, Stat, type Field } from "@/app/ui";
 import { date, money, pct, qty, today } from "@/app/format";
+import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
+import { DocumentsSection } from "@/modules/documents/Documents";
 
 function usePO() {
   const { po } = useParams();
@@ -106,6 +108,10 @@ export function PurchaseOrderDetail() {
           { key: "amount", header: "Amount", align: "right", render: (r: any) => <span className={r.voided ? "text-gray-400 line-through" : ""}>{money(r.amount, cur)}</span> },
           { key: "x", header: "", render: (r: any) => r.pid && !r.voided ? <Link to={`/payments/${String(r.pid).slice(0, 8)}/void?back=${encodeURIComponent(base)}`} className="text-xs text-rose-600 hover:underline">void</Link> : null }]} />
     </Section>
+    <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <TasksSection eq={{ purchase_order_id: p.id }} hide={["po", "supplier"]} newLink={newTaskPath({ po: p.po_number, back: base })} />
+      <DocumentsSection entity="purchase_orders" id={p.id} />
+    </div>
   </>;
 }
 

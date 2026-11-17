@@ -10,6 +10,7 @@ import { orderPath, poPath, shipmentPath } from "@/app/paths";
 import { Pill, SeverityPill } from "@/app/ui";
 import { BUCKET_LABEL, BUCKET_TONE, date, days, money, monthName, pct, STATUS_LABEL, STATUS_ORDER } from "@/app/format";
 import { cn } from "@/lib/utils";
+import { TaskItems } from "@/modules/tasks/Tasks";
 
 export interface WidgetProps { year: number }
 export interface Widget { id: string; title: string; description: string; span: "full" | "wide" | "half" | "third"; Component: (p: WidgetProps) => ReactNode }
@@ -167,10 +168,22 @@ function Activity() {
   </Card>;
 }
 
+// ---------------- tasks ----------------
+function TasksWidget() {
+  const rows = useRows("v_tasks", { eq: { status: "open" } }).rows;
+  const week = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  const soon = rows.filter(t => t.state === "overdue" || t.state === "today" || (t.due_date && t.due_date <= week));
+  const late = rows.filter(t => t.state === "overdue").length;
+  return <Card title={<span className="flex items-center gap-2">Tasks{late > 0 && <Pill tone="red">{late} overdue</Pill>}</span>} action={<More to="/tasks">All {rows.length}</More>}>
+    <div className="-mx-5"><TaskItems rows={soon.slice(0, 7)} empty={rows.length ? "Nothing due in the next 7 days" : "No open tasks"} /></div>
+  </Card>;
+}
+
 export const WIDGETS: Widget[] = [
   { id: "kpis", title: "Key figures", description: "To receive, overdue, to pay, revenue this year", span: "full", Component: KpiStrip },
-  { id: "chase", title: "Payments to chase", description: "Open customer amounts, most urgent first", span: "half", Component: ChaseList },
-  { id: "attention", title: "Needs attention", description: "Signals the system found in the data", span: "half", Component: Attention },
+  { id: "chase", title: "Payments to chase", description: "Open customer amounts, most urgent first", span: "third", Component: ChaseList },
+  { id: "tasks", title: "Tasks", description: "Your reminders: overdue, today and the next 7 days", span: "third", Component: TasksWidget },
+  { id: "attention", title: "Needs attention", description: "Signals the system found in the data", span: "third", Component: Attention },
   { id: "revenue", title: "Order value per month", description: "Bars per month, per currency", span: "wide", Component: RevenueChart },
   { id: "pipeline", title: "Orders by status", description: "How many orders sit in each step", span: "third", Component: Pipeline },
   { id: "cash", title: "Expected cash flow", description: "Money in and out, with and without due date", span: "half", Component: CashFlow },

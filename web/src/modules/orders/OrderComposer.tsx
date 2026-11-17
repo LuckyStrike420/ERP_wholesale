@@ -14,7 +14,7 @@ import { errorText, useApp, useRows } from "@/app/store";
 import { Link, useNav, useQuery } from "@/app/router";
 import { findOrder, orderPath } from "@/app/paths";
 import { Loading, Notice, PageHeader, Pill, Section, selectClass } from "@/app/ui";
-import { date, money, pct, qty, SOURCE_LABEL, today } from "@/app/format";
+import { date, money, pct, qty, SOURCE_LABEL, termText, today } from "@/app/format";
 import { cn } from "@/lib/utils";
 
 type Line = { key: number; product_id: string; quantity: string; unit_price: string; batch_item_id: string;
@@ -30,13 +30,14 @@ export default function OrderComposer() {
   const fromRef = q.get("from");
   const customers = useRows("customers", { order: [["name", "asc"]] });
   const terms = useRows("customer_terms").rows;
+  const payTerms = useRows("payment_terms", { order: [["deposit_pct", "desc"], ["name", "asc"]] }).rows;
   const products = useRows("products", { order: [["name", "asc"]] });
   const orders = useRows("v_orders", { order: [["po_date", "desc"]] });
   const stock = useRows("v_batch_item_stock").rows;
   const fromOrder = fromRef ? findOrder(orders.rows, fromRef) : undefined;
   const fromLines = useRows(fromOrder ? "v_order_lines" : null, { eq: { sales_order_id: fromOrder?.id }, order: [["line_no", "asc"]] });
 
-  const [h, setH] = useState({ customer_id: "", order_type: "FOB", pi_number: "", customer_po: "", po_date: today(), notes: "" });
+  const [h, setH] = useState({ customer_id: "", order_type: "FOB", pi_number: "", customer_po: "", po_date: today(), notes: "", payment_term_id: "" });
   const [lines, setLines] = useState<Line[]>([blank()]);
   const [preview, setPreview] = useState<any>(null); const [calc, setCalc] = useState(false);
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
@@ -47,6 +48,9 @@ export default function OrderComposer() {
   const cur = h.order_type === "FOB" ? "USD" : "EUR";
   const lastOrder = h.customer_id ? orders.rows.find(o => o.customer_id === h.customer_id && o.status !== "cancelled") : undefined;
   const term = terms.find(t => t.customer_id === h.customer_id && t.order_type === h.order_type);
+  // the order's term: chosen here, otherwise the customer's term for this type
+  const termId = h.payment_term_id || term?.payment_term_id || "";
+  const payTerm = payTerms.find(t => t.id === termId);
 
   // start: suggested PI#, or a copy of an earlier order
   useEffect(() => {
@@ -61,7 +65,7 @@ export default function OrderComposer() {
   const setLine = (key: number, patch: Partial<Line>) => setLines(ls => ls.map(l => (l.key === key ? { ...l, ...patch } : l)));
   const pickCustomer = (id: string) => {
     const last = orders.rows.find(o => o.customer_id === id && o.status !== "cancelled");
-    setH(x => ({ ...x, customer_id: id, order_type: last?.order_type ?? x.order_type }));
+    setH(x => ({ ...x, customer_id: id, order_type: last?.order_type ?? x.order_type, payment_term_id: "" }));
   };
   const copyFrom = async (o: any) => {
     try { const rows = await db.select<any>("v_order_lines", { eq: { sales_order_id: o.id }, order: [["line_no", "asc"]] });
@@ -91,13 +95,13 @@ export default function OrderComposer() {
 
   // live figures from the database
   const ready = lines.filter(complete);
-  const prevKey = JSON.stringify([h.customer_id, h.order_type, h.po_date, ready.map(l => [l.key, l.product_id, l.quantity, l.unit_price, l.batch_item_id])]);
+  const prevKey = JSON.stringify([h.customer_id, h.order_type, h.po_date, termId, ready.map(l => [l.key, l.product_id, l.quantity, l.unit_price, l.batch_item_id])]);
   useEffect(() => {
     if (!h.customer_id || !ready.length) { setPreview(null); return; }
     let live = true; setCalc(true);
     const t = setTimeout(async () => {
       try {
-        const p = await db.rpc<any>("preview_order", { p_customer: h.customer_id, p_order_type: h.order_type, p_po_date: h.po_date || null,
+        const p = await db.rpc<any>("preview_order", { p_customer: h.customer_id, p_order_type: h.order_type, p_po_date: h.po_date || null, p_payment_term: termId || null,
           p_lines: ready.map(l => ({ idx: l.key, product_id: l.product_id, quantity: num(l.quantity), unit_price: num(l.unit_price), batch_item_id: l.batch_item_id || null })) });
         if (live) { setPreview(p); setErr(""); }
       } catch (e) { if (live) setErr(errorText(e)); } finally { if (live) setCalc(false); }
@@ -115,7 +119,7 @@ export default function OrderComposer() {
     if (!ready.length) return setErr("Add at least one order line");
     setBusy(true);
     try {
-      const ref = await db.rpc<string>("create_order", { p_order: h, p_lines: ready.map(l => ({ product_id: l.product_id, quantity: num(l.quantity), unit_price: num(l.unit_price), batch_item_id: l.batch_item_id || null })) });
+      const ref = await db.rpc<string>("create_order", { p_order: { ...h, payment_term_id: termId || null }, p_lines: ready.map(l => ({ product_id: l.product_id, quantity: num(l.quantity), unit_price: num(l.unit_price), batch_item_id: l.batch_item_id || null })) });
       refresh(); nav(`/orders/${encodeURIComponent(ref)}`);
     } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
   };
@@ -137,19 +141,25 @@ export default function OrderComposer() {
               <Label htmlFor="customer" className="mb-1.5 block text-sm font-medium text-gray-700">Customer <span className="text-rose-600">*</span></Label>
               <select id="customer" className={selectClass + " w-full"} value={h.customer_id} onChange={e => pickCustomer(e.target.value)}>
                 <option value="">Choose…</option>{customers.rows.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-              {h.customer_id && <p className="mt-1.5 text-xs text-gray-500">{term ? `${pct(term.deposit_pct, 0)} deposit · ${term.payment_days} days payment term` : "No terms for this type"}
+              {h.customer_id && <p className="mt-1.5 text-xs text-gray-500">{payTerm ? payTerm.name : term ? `${pct(term.deposit_pct, 0)} deposit` : "No payment term for this type"}
                 {lastOrder && <> · last order <Link to={orderPath(lastOrder)} className="text-indigo-600 hover:underline">PI {lastOrder.pi_number ?? "draft"}</Link> on {date(lastOrder.po_date)}</>}</p>}
             </div>
             <div className="col-span-2">
               <span className="mb-1.5 block text-sm font-medium text-gray-700">Type</span>
               <div className="inline-flex rounded-md border border-gray-300 p-0.5" role="radiogroup" aria-label="Order type">
-                {[["FOB", "FOB · USD"], ["EXW", "EXW · EUR"]].map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={h.order_type === v} onClick={() => setH(x => ({ ...x, order_type: v }))}
+                {[["FOB", "FOB · USD"], ["EXW", "EXW · EUR"]].map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={h.order_type === v} onClick={() => setH(x => ({ ...x, order_type: v, payment_term_id: "" }))}
                   className={cn("rounded px-3 py-1.5 text-sm font-medium transition-colors", h.order_type === v ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100")}>{l}</button>)}
               </div>
             </div>
             <Field id="pi" label="PI#" value={h.pi_number} onChange={v => setH(x => ({ ...x, pi_number: v }))} hint={nextPi && h.pi_number === nextPi ? "Next free number" : "Empty = save as draft"} />
             <Field id="cpo" label="Customer PO#" value={h.customer_po} onChange={v => setH(x => ({ ...x, customer_po: v }))} />
             <Field id="date" label="PO date" type="date" value={h.po_date} onChange={v => setH(x => ({ ...x, po_date: v }))} />
+            <div className="col-span-2 md:col-span-4">
+              <Label htmlFor="term" className="mb-1.5 block text-sm font-medium text-gray-700">Payment term</Label>
+              <select id="term" className={selectClass + " w-full"} value={termId} onChange={e => setH(x => ({ ...x, payment_term_id: e.target.value }))}>
+                <option value="">–</option>{payTerms.filter(t => t.active || t.id === termId).map(t => <option key={t.id} value={t.id}>{t.name}{t.id === term?.payment_term_id ? " (customer's term)" : ""}</option>)}</select>
+              {payTerm && <p className="mt-1.5 text-xs text-gray-500">{termText(payTerm)}</p>}
+            </div>
           </div>
           {h.customer_id && lastOrder && !fromOrder && !lines.some(l => l.product_id) && <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/60 px-5 py-3 text-sm">
             <span className="text-gray-600">Same products as last time?</span>
@@ -201,7 +211,9 @@ export default function OrderComposer() {
             <Row label="Margin" value={o ? <span className={missing ? "text-amber-700" : ""}>{money(o.margin, cur)} · {o.margin_pct == null ? "incomplete" : pct(o.margin_pct)}</span> : "–"} />
             <div className="border-t border-gray-100 pt-2" />
             <Row label={`Deposit ${o ? pct(o.deposit_pct, 0) : term ? pct(term.deposit_pct, 0) : ""}`} value={o ? money(o.deposit_due, cur) : "–"} />
+            {o?.deposit_due_date && <Row label="Deposit due" value={date(o.deposit_due_date)} />}
             <Row label="Balance" value={o ? money(o.balance_due, cur) : "–"} />
+            {o?.balance_due_date && <Row label="Balance due" value={date(o.balance_due_date)} />}
           </div>
         </Section>
         {(missing > 0 || below > 0 || moqWarn.length > 0) && <Notice tone="amber" title="Check before saving">

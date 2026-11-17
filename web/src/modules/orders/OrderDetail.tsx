@@ -5,8 +5,11 @@ import { useApp, useRows } from "@/app/store";
 import { Link, useParams } from "@/app/router";
 import { customerPath, orderPath, poPath, shipmentPath } from "@/app/paths";
 import { ConfirmDialog, DataTable, KV, LinkButton, Loading, NotFound, PageHeader, PaymentPill, Pill, Section, SeverityPill, Stat, StatusPill, selectClass } from "@/app/ui";
-import { date, money, marginPct, pct, qty, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER, SHIP_LABEL } from "@/app/format";
+import { date, money, marginPct, pct, qty, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER, SHIP_LABEL, termWhen } from "@/app/format";
 import { useOrder } from "./data";
+import { OrderTimeline } from "./Timeline";
+import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
+import { DocumentsSection } from "@/modules/documents/Documents";
 
 export default function OrderDetail() {
   const { ref } = useParams();
@@ -20,7 +23,7 @@ export default function OrderDetail() {
   const shipLinks = useRows(id && "shipment_orders", { eq: { sales_order_id: id } }).rows;
   const shipments = useRows("v_shipments").rows;
   const attention = useRows("v_attention").rows;
-  const history = useRows(id && "audit_log", { eq: { row_id: id }, order: [["id", "desc"]], limit: 30 }).rows;
+  const terms = useRows("payment_terms").rows;
   const products = useRows("products").rows;
   const pos = useRows("v_purchase_orders").rows;
   const stock = useRows("v_batch_item_stock").rows;
@@ -38,6 +41,13 @@ export default function OrderDetail() {
   const customer = customers.find(c => c.id === o.customer_id);
   const late = Number(o.overdue_amount) > 0;
   const withoutPo = lines.filter(l => !l.purchase_order_id && Number(l.qty) > 0);
+  const term = terms.find(t => t.id === o.payment_term_id);
+  const open = Number(o.outstanding) > 0.01;
+  // where a due date comes from: typed on the order, the payment term, or nothing yet (and why)
+  const dueText = (d: any, set: boolean, anchor: string | null, days: any) => d
+    ? <span>{date(d)} <span className="text-xs text-gray-400">{set ? "set on this order" : term ? termWhen(anchor, days) : ""}</span></span>
+    : <span className="text-gray-400">{term && anchor ? `${termWhen(anchor, days)}: that date is not known yet` : "not set"}</span>;
+  const chase = Number(o.deposit_outstanding) > 0.01 ? { what: "deposit", due: o.deposit_due_date } : { what: "payment", due: o.balance_due_date ?? o.deposit_due_date };
   const poButton = !locked && withoutPo.length > 0 && <LinkButton size="sm" to={`${base}/purchase-order`}><ClipboardList />Create PO{withoutPo.length < lines.length ? ` (${withoutPo.length} line${withoutPo.length === 1 ? "" : "s"})` : ""}</LinkButton>;
 
   return <>
@@ -70,14 +80,19 @@ export default function OrderDetail() {
         {a.code === "stock_sale_without_po" && !locked && <Link to={`${base}/purchase-order`} className="ml-1 font-medium text-indigo-600 hover:underline">Create PO</Link>}</li>)}</ul></div>}
 
     <div className="mb-6 grid gap-6 lg:grid-cols-2">
-      <Section title="Payment schedule" action={!locked && <Link to={`${base}/edit`} className="text-xs font-medium text-indigo-600 hover:underline">Set due dates</Link>}>
+      <Section title="Payment schedule" sub={term ? term.name : "No payment term on this order"}
+        action={!locked && <Link to={`${base}/edit`} className="text-xs font-medium text-indigo-600 hover:underline">Change term or dates</Link>}>
         <KV items={[
           [`Deposit ${pct(o.deposit_pct, 0)}`, <>{money(o.deposit_due, cur)} {Number(o.deposit_due) > 0 && (Number(o.deposit_outstanding) <= 0.01 ? <Pill tone="green">received</Pill> : <Pill tone="amber">{money(o.deposit_outstanding, cur)} open</Pill>)}</>],
-          ["Deposit due", o.deposit_due_date ? date(o.deposit_due_date) : o.order_type === "EXW" ? "before pick-up" : <span className="text-gray-400">not set</span>],
-          ["Balance", money(o.balance_due, cur)],
-          ["Balance due", o.balance_due_date ? date(o.balance_due_date) : o.order_type === "FOB" ? <span className="text-gray-400">10 days before ETA (ETA unknown)</span> : <span className="text-gray-400">not set</span>],
+          ...(Number(o.deposit_due) > 0 ? [["Deposit due", dueText(o.deposit_due_date, o.deposit_due_date_set, term?.deposit_anchor, term?.deposit_days)] as [any, any]] : []),
+          ...(Number(o.deposit_pct) < 1 ? [["Balance", money(o.balance_due, cur)] as [any, any],
+            ["Balance due", term || o.balance_due_date ? dueText(o.balance_due_date, o.balance_due_date_set, term?.balance_anchor, term?.balance_days)
+              : o.order_type === "FOB" ? <span className="text-gray-400">10 days before ETA (ETA unknown)</span> : <span className="text-gray-400">not set</span>] as [any, any]] : []),
           ...(o.order_type === "EXW" ? [["Reminder from", date(o.reminder_date)] as [any, any]] : []),
         ]} />
+        {open && !["draft", "cancelled"].includes(o.status) && <div className="border-t border-gray-100 px-5 py-2.5">
+          <Link to={newTaskPath({ order: o.pi_number ?? `draft-${o.id.slice(0, 8)}`, title: `Chase ${chase.what} ${o.pi_number ? `PI ${o.pi_number} ` : ""}(${o.customer_name})`, due: chase.due, back: base })}
+            className="text-xs font-medium text-indigo-600 hover:underline">+ Reminder to chase the {chase.what}</Link></div>}
       </Section>
       <Section title="Order">
         <KV items={[
@@ -110,7 +125,7 @@ export default function OrderDetail() {
         ]} />
     </Section>
 
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="mb-6 grid gap-6 lg:grid-cols-2">
       <Section title="Payments and corrections" action={!locked && <span className="flex gap-2">
         <LinkButton size="sm" variant="outline" to={`${base}/correction`}>Correction</LinkButton>
         <LinkButton size="sm" variant="outline" to={`${base}/write-off`}>Write-off</LinkButton></span>}>
@@ -123,13 +138,11 @@ export default function OrderDetail() {
             { key: "amount", header: "Amount", align: "right", render: (r: any) => <span className={r.voided ? "text-gray-400 line-through" : ""}>{money(r.amount, cur)}</span> },
             { key: "x", header: "", render: (r: any) => r.pid && !r.voided ? <Link to={`/payments/${String(r.pid).slice(0, 8)}/void?back=${encodeURIComponent(base)}`} className="text-xs text-rose-600 hover:underline">void</Link> : null }]} />
       </Section>
-      <Section title="History">
-        <DataTable dense rows={history} empty="No changes logged"
-          cols={[{ key: "changed_at", header: "When", render: a => String(a.changed_at).slice(0, 16).replace("T", " ") },
-            { key: "what", header: "Change", render: a => a.action === "INSERT" ? "Order created"
-              : Object.keys(a.new_data ?? {}).filter(k => JSON.stringify(a.new_data[k]) !== JSON.stringify(a.old_data?.[k]))
-                  .map(k => `${k.replace(/_/g, " ")}: ${k === "status" ? `${STATUS_LABEL[a.old_data?.[k]] ?? "–"} → ${STATUS_LABEL[a.new_data[k]]}` : `${a.old_data?.[k] ?? "–"} → ${a.new_data[k] ?? "–"}`}`).join("; ") }]} />
-      </Section>
+      <TasksSection eq={{ sales_order_id: o.id }} hide={["order", "customer"]} newLink={newTaskPath({ order: o.pi_number ?? `draft-${o.id.slice(0, 8)}`, back: base })} />
+    </div>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
+      <OrderTimeline o={o} />
+      <DocumentsSection entity="sales_orders" id={o.id} className="self-start" />
     </div>
     <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)} danger title={confirm?.title ?? ""} body={confirm?.body} confirmLabel={confirm?.label} onConfirm={() => confirm?.go()} />
   </>;
