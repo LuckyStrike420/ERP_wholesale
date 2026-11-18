@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { errorText, useApp, useRows } from "@/app/store";
 import { ConfirmDialog, Section, selectClass } from "@/app/ui";
 import { DOC_TYPES, fileSize } from "@/app/format";
-import { toast } from "sonner";
+import { toast } from "@/app/notify";
 
 const MAX_MB = 50;
 const safeName = (n: string) => n.normalize("NFKD").replace(/[^\w.\-]+/g, "_").slice(-120);

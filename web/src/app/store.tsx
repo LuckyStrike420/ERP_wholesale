@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { toast } from "sonner";
+import { toast } from "./notify";
 import type { DataClient, Row, SelectOpts, Session } from "@/data/client";
 
 interface Ctx { db: DataClient; session: Session | null; version: number; refresh: () => void; run: <T>(fn: () => Promise<T>, done?: string) => Promise<T | undefined>;

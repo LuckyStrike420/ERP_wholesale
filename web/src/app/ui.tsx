@@ -4,7 +4,7 @@
  */
 import { useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, Pencil, Search, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "./notify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

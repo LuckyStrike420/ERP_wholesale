@@ -7,7 +7,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Loader2, Plus, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "./notify";
 import { errorText } from "./store";
 import { cn } from "@/lib/utils";
 import { similarName } from "./duplicates";

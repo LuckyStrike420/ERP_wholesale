@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Download, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/app/notify";
 import { Button } from "@/components/ui/button";
 import { errorText, useApp, useRows } from "@/app/store";
 import { Link, useNav, useParams, useQuery } from "@/app/router";

@@ -12,6 +12,7 @@ import { ROUTES } from "@/routes";
 import { CommandPalette, shortcutLabel, showCommandPalette } from "@/app/CommandPalette";
 import { SidebarRecords } from "@/app/Favorites";
 import { NotificationBell } from "@/app/Notifications";
+import { ErrorDialog } from "@/app/notify";
 
 const NAV: { group: string; items: { to: string; section: string; label: string; icon: any }[] }[] = [
   { group: "", items: [{ to: "/", section: "dashboard", label: "Overview", icon: LayoutDashboard }, { to: "/payments", section: "payments", label: "Payments", icon: Receipt }, { to: "/tasks", section: "tasks", label: "Tasks", icon: CheckSquare }] },
@@ -115,5 +116,5 @@ export default function App() {
   if (!session) return <SignIn db={db} onDone={reload} />;
   if (!session.role) return <div className="p-10 text-sm">You are signed in as {session.email}, but no role has been assigned to this account yet. Ask the admin to give your account a role under Admin → Users.
     <Button variant="outline" size="sm" className="ml-3" onClick={async () => { await db.signOut?.(); reload(); }}>Sign out</Button></div>;
-  return <RouterProvider><AppProvider db={db} session={session}><Shell db={db} session={session} onSignOut={async () => { await db.signOut?.(); reload(); }} /><Toaster position="bottom-right" richColors /></AppProvider></RouterProvider>;
+  return <RouterProvider><AppProvider db={db} session={session}><Shell db={db} session={session} onSignOut={async () => { await db.signOut?.(); reload(); }} /><Toaster position="bottom-right" richColors /><ErrorDialog /></AppProvider></RouterProvider>;
 }

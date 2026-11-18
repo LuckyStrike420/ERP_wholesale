@@ -8,7 +8,7 @@ import { BookmarkPlus, Columns3, List, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { errorText, useApp, useRows } from "@/app/store";
-import { toast } from "sonner";
+import { toast } from "@/app/notify";
 import { Link, useNav, useQuery } from "@/app/router";
 import { orderPath } from "@/app/paths";
 import { DataTable, LinkButton, PageHeader, PaymentPill, Section, StatusPill, selectClass } from "@/app/ui";
