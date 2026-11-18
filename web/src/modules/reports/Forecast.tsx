@@ -5,6 +5,7 @@
  * Cash: every open customer and supplier amount by its due date, per week, with the running balance from a start
  * balance you type in. Overdue and undated amounts are shown apart. EUR and USD are never added together.
  */
+import { TargetEditor } from "@/modules/insights/Insights";
 import { useMemo, useState } from "react";
 import { useRows } from "@/app/store";
 import { useNav, useQuery, usePath } from "@/app/router";
@@ -48,6 +49,7 @@ export function RevenueForecast() {
       <select aria-label="Projection basis" className={selectClass} value={basis} onChange={e => set("basis", e.target.value)}>
         {[3, 6, 12].map(n => <option key={n} value={n}>Projection: average of the last {n} months</option>)}</select>
     </div>
+    <TargetEditor year={year} />
     {!per.length && <Notice tone="gray">No revenue yet to base a forecast on.</Notice>}
     {per.map(p => <Section key={p.cur} title={`Revenue ${year} · ${p.cur}`} sub={`Booked by PO date (PIs sent); months to come at ${money(p.run, p.cur, 0)} per month, the average of the last ${basis} complete months.`} className="mb-6">
       <div className="grid gap-3 px-5 pt-4 sm:grid-cols-3">

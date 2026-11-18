@@ -1,6 +1,7 @@
 /**
  * Customers and suppliers: /customers, /customers/new, /customers/jml, /customers/jml/edit (same for /suppliers).
  */
+import { CustomerHealth, CustomerReorders, HealthDot } from "@/modules/insights/Insights";
 import { addressFields } from "@/app/countries";
 import { Pencil, Plus } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
@@ -33,10 +34,12 @@ const terms = (x: any) => !x ? "–" : x.term ? x.term.name : `${pct(x.deposit_p
 const termLine = (x: any) => !x ? "–" : x.term ? <div><div className="text-gray-900">{x.term.name}</div><div className="text-xs text-gray-500">{termText(x.term)}</div></div> : terms(x);
 
 export function Customers() {
-  const { rows } = useCustomers();
+  const { rows } = useCustomers(); const health = useRows("v_customer_health").rows;
   return <>
-    <PageHeader title="Customers" sub="One record per customer, with a payment term per order type."><LinkButton to="/customers/new"><Plus />New customer</LinkButton></PageHeader>
+    <PageHeader title="Customers" sub="One record per customer, with a payment term per order type.">
+      <LinkButton variant="outline" to="/customers/health">Health and reorders</LinkButton><LinkButton to="/customers/new"><Plus />New customer</LinkButton></PageHeader>
     <Section><DataTable rows={rows} search exportName="customers" rowTo={c => customerPath(c)} cols={[
+      { key: "health", header: "", width: "2rem", value: c => ({ red: 0, amber: 1, green: 2 } as any)[health.find(h => h.customer_id === c.id)?.score] ?? 3, render: c => <HealthDot score={health.find(h => h.customer_id === c.id)?.score} /> },
       { key: "name", header: "Customer", render: c => <div><div className="font-semibold text-gray-900">{c.name}</div><div className="text-xs text-gray-500">{[c.country, c.contact_name].filter(Boolean).join(" · ")}</div></div> },
       { key: "exw", header: "EXW terms", value: c => c.exw?.deposit_pct, render: c => terms(c.exw) },
       { key: "fob", header: "FOB terms", value: c => c.fob?.deposit_pct, render: c => terms(c.fob) },
@@ -72,6 +75,8 @@ export function CustomerDetail() {
       { id: "terms", title: "Payment terms", size: "half", node: <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)]]} /></Section> },
       { id: "details", title: "Details", size: "half", node: <Section title="Details"><KV items={[["Address", c.address || c.country ? <span className="whitespace-pre-line">{[c.address, c.country].filter(Boolean).join("\n")}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section> },
       { id: "notes", title: "Notes", size: "half", node: <NotesSection party="customer" p={c} /> },
+      { id: "health", title: "Health", size: "half", node: <CustomerHealth customerId={c.id} /> },
+      { id: "reorders", title: "Reorder rhythm", node: <CustomerReorders customerId={c.id} /> },
       { id: "orders", title: "Orders", node: <Section title="Orders">
       <DataTable rows={orders} rowTo={o => orderPath(o)} empty="No orders yet" cols={[
         { key: "pi_number", header: "PI#", render: o => <span className="font-semibold text-gray-900">{o.pi_number ?? "draft"}</span> }, { key: "order_type", header: "Type" },

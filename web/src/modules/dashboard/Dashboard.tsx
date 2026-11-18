@@ -2,15 +2,25 @@
  * The dashboard is a grid of independent widgets (see widgets.tsx).
  * Which widgets show, and in what order, is saved per user; "Customize" changes it.
  * Saved reports marked "Show on the dashboard" are added as widgets too.
+ * The filter (customer, order type, year) sits in the address (?customer=…&type=…&year=…) and reaches every widget.
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRows } from "@/app/store";
 import { useNav, useQuery } from "@/app/router";
 import { LinkButton, selectClass } from "@/app/ui";
 import { cn } from "@/lib/utils";
-import { WIDGETS as BUILT_IN, type Widget } from "./widgets";
+import { WIDGETS as BASE, type Widget } from "./widgets";
+import { HealthWidget, ReordersWidget, TargetsWidget } from "@/modules/insights/Insights";
+import { Combobox } from "@/app/Combobox";
+import { X } from "lucide-react";
+
+const BUILT_IN: Widget[] = [...BASE,
+  { id: "targets", title: "Targets", description: "This month, year to date and the year against the targets", span: "third", Component: p => <TargetsWidget year={p.year} /> },
+  { id: "health", title: "Customer health", description: "Customers to watch: paying late, ordering less, gone quiet", span: "third", Component: p => <HealthWidget customer={p.customer} /> },
+  { id: "reorders", title: "Reorders due", description: "Customers expected to order again, late ones first", span: "third", Component: p => <ReordersWidget customer={p.customer} /> },
+];
 import { ReportWidget } from "@/modules/reports/Custom";
 import { useLayout } from "@/app/Layout";
 
@@ -24,6 +34,9 @@ export default function Dashboard() {
   const thisYear = new Date().getFullYear();
   const years = useMemo(() => [...new Set([thisYear, ...monthly.map(m => m.year)])].sort((a, b) => b - a), [monthly, thisYear]);
   const year = Number(q.get("year") ?? thisYear);
+  const customer = q.get("customer"), type = q.get("type");
+  const customers = useRows("customers", { order: [["name", "asc"]] }).rows;
+  const setQ = (k: string, v: string | null) => { const n = new URLSearchParams(q); if (v) n.set(k, v); else n.delete(k); const s = n.toString(); nav(s ? `/?${s}` : "/", { replace: true }); };
   const reports = useRows("reports", { order: [["name", "asc"]] }).rows;
   const WIDGETS: Widget[] = useMemo(() => [...BUILT_IN, ...reports.filter(r => r.on_dashboard).map(r => ({ id: `report:${r.id}`, title: r.name, description: "Your report",
     span: "half" as const, Component: () => <ReportWidget report={r} /> }))], [reports]);
@@ -41,7 +54,11 @@ export default function Dashboard() {
         <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Overview</h1>
       </div>
       <div className="flex items-center gap-2">
-        <select aria-label="Year" className={selectClass + " w-24"} value={year} onChange={e => nav(Number(e.target.value) === thisYear ? "/" : `/?year=${e.target.value}`, { replace: true })}>{years.map(y => <option key={y}>{y}</option>)}</select>
+        <div className="w-56"><Combobox label="Filter on customer" value={customer ?? ""} onChange={v => setQ("customer", v || null)} placeholder="All customers"
+          options={customers.map(c => ({ value: c.id, label: c.name, hint: c.country ?? undefined }))} /></div>
+        <select aria-label="Order type" className={selectClass + " w-32"} value={type ?? ""} onChange={e => setQ("type", e.target.value || null)}>
+          <option value="">EXW and FOB</option><option value="EXW">Only EXW</option><option value="FOB">Only FOB</option></select>
+        <select aria-label="Year" className={selectClass + " w-24"} value={year} onChange={e => setQ("year", Number(e.target.value) === thisYear ? null : e.target.value)}>{years.map(y => <option key={y}>{y}</option>)}</select>
         <Button variant="outline" onClick={() => setEditing(e => !e)} aria-pressed={editing}><SlidersHorizontal className="h-4 w-4" />Customize</Button>
         <LinkButton to="/orders/new"><Plus />New order</LinkButton>
       </div>
@@ -59,8 +76,13 @@ export default function Dashboard() {
         </li>; })}</ul>
     </section>}
 
+    {(customer || type) && <div className="mb-4 flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2 text-sm text-indigo-900">
+      Filtered on {[customer && <b key="c">{customers.find(c => c.id === customer)?.name ?? "a customer"}</b>, type && <b key="t">{type}</b>].filter(Boolean).reduce<ReactNode[]>((a, x, i) => i ? [...a, " and ", x] : [x], [])}.
+      <span className="text-indigo-700/80">Widgets that cannot be filtered say so.</span>
+      <button type="button" onClick={() => { const n = new URLSearchParams(q); n.delete("customer"); n.delete("type"); const s = n.toString(); nav(s ? `/?${s}` : "/", { replace: true }); }}
+        className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-indigo-700 hover:underline"><X className="h-3.5 w-3.5" />Clear filter</button></div>}
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-6">
-      {shown.map(w => <div key={w.id} className={cn("min-w-0", SPAN[w.span])}><w.Component year={year} /></div>)}
+      {shown.map(w => <div key={w.id} className={cn("min-w-0", SPAN[w.span])}><w.Component year={year} customer={customer} type={type} /></div>)}
     </div>
   </>;
 }

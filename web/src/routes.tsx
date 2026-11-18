@@ -2,6 +2,7 @@
  * All pages and their URLs, in one place. Specific paths come before paths with a :parameter.
  * `section` decides which item in the side menu is highlighted.
  */
+import { CustomersHealthPage } from "@/modules/insights/HealthPage";
 import { Permissions } from "@/modules/admin/Permissions";
 import type { ComponentType } from "react";
 import Dashboard from "@/modules/dashboard/Dashboard";
@@ -47,7 +48,7 @@ export const ROUTES: Route[] = [
   r("/purchasing/:po", "purchasing", PurchaseOrderDetail), r("/purchasing/:po/edit", "purchasing", PurchaseOrderEdit),
   r("/purchasing/:po/payment", "purchasing", PurchaseOrderPayment), r("/purchasing/:po/invoice", "purchasing", PurchaseOrderInvoice),
   r("/purchasing/:po/write-off", "purchasing", PurchaseOrderWriteOff), r("/purchasing/:po/pdf", "purchasing", PurchaseOrderDocument),
-  r("/customers", "customers", Customers), r("/customers/new", "customers", CustomerForm),
+  r("/customers", "customers", Customers), r("/customers/new", "customers", CustomerForm), r("/customers/health", "customers", CustomersHealthPage),
   r("/customers/:slug", "customers", CustomerDetail), r("/customers/:slug/edit", "customers", CustomerForm),
   r("/customers/:slug/contacts/new", "customers", CustomerContactForm), r("/customers/:slug/contacts/:id", "customers", CustomerContactForm),
   r("/suppliers", "suppliers", Suppliers), r("/suppliers/new", "suppliers", SupplierForm),

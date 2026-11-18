@@ -25,11 +25,12 @@ const ONLY_LABEL: Record<string, string> = { deposit_open: "the deposit is still
 export function ruleText(r: any) {
   const when = r.trigger_type === "status_reached" ? <>an order reaches <b>{STATUS_LABEL[r.status] ?? "…"}</b></>
     : r.trigger_type === "date_within" ? <><b>{DATE_LABEL[r.date_field] ?? "a date"}</b> is within <b>{r.within_days ?? "…"} days</b></>
-    : r.trigger_type === "margin_below" ? <>the margin is below <b>{r.margin_pct != null ? pct(r.margin_pct, 1) : "…"}</b></> : <>…</>;
+    : r.trigger_type === "margin_below" ? <>the margin is below <b>{r.margin_pct != null ? pct(r.margin_pct, 1) : "…"}</b></>
+    : r.trigger_type === "reorder_due" ? <>a customer who ordered a product at least <b>{r.min_orders ?? "…"} times</b> is <b>{r.grace_days ?? "…"} days</b> past the date the next order was expected (and has no draft for it)</> : <>…</>;
   const only = [r.order_type && <>it is <b>{r.order_type}</b></>, r.only_if && ONLY_LABEL[r.only_if]].filter(Boolean);
   const d = Number(r.task_due_days ?? 0);
-  const due = !r.task_due ? "without a due date" : `due ${d === 0 ? "on" : `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} ${d < 0 ? "before" : "after"}`} ${DUE_LABEL[r.task_due]}`;
-  const then = r.action === "flag" ? <>flag the order: <b>“{r.flag_text || "…"}”</b></> : <>make the task <b>“{r.task_title || "…"}”</b>, {due}{r.assign_name ? `, for ${r.assign_name}` : ""}</>;
+  const due = r.trigger_type === "reorder_due" ? (d === 0 ? "due the day it is made" : `due ${d} day${d === 1 ? "" : "s"} after it is made`) : !r.task_due ? "without a due date" : `due ${d === 0 ? "on" : `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} ${d < 0 ? "before" : "after"}`} ${DUE_LABEL[r.task_due]}`;
+  const then = r.trigger_type === "reorder_due" ? <>make the task <b>“{r.task_title || "…"}”</b> on the customer, {due}{r.assign_name ? `, for ${r.assign_name}` : ""}</> : r.action === "flag" ? <>flag the order: <b>“{r.flag_text || "…"}”</b></> : <>make the task <b>“{r.task_title || "…"}”</b>, {due}{r.assign_name ? `, for ${r.assign_name}` : ""}</>;
   return <>When {when}{only.length > 0 && <> and {only.map((x, i) => <span key={i}>{i > 0 && " and "}{x}</span>)}</>}: {then}.</>;
 }
 
@@ -58,32 +59,41 @@ export function AutomationForm() {
   if (rules.loading && !rules.rows.length) return <Loading />;
   const r = id ? byShort(rules.rows, id) : undefined;
   if (id && !r) return <NotFound what="Rule" back={{ to: "/admin/automations", label: "Automation rules" }} />;
-  const isTask = (v: any) => v.action === "task", isFlag = (v: any) => v.action === "flag";
+  const reorder = (v: any) => v.trigger_type === "reorder_due", orders = (v: any) => !reorder(v);
+  const isTask = (v: any) => v.action === "task" || reorder(v), isFlag = (v: any) => v.action === "flag" && !reorder(v);
   const fields: Field[] = [
     { name: "name", label: "Name", required: true, placeholder: "e.g. PI sent: chase the deposit" },
     { name: "active", label: "Rule is on", type: "checkbox" },
     { name: "trigger_type", label: "When", type: "select", required: true, section: "When", options: [
-      { value: "status_reached", label: "An order reaches a status" }, { value: "date_within", label: "A date comes within a number of days" }, { value: "margin_below", label: "The margin of an order is below …" }] },
+      { value: "status_reached", label: "An order reaches a status" }, { value: "date_within", label: "A date comes within a number of days" }, { value: "margin_below", label: "The margin of an order is below …" },
+      { value: "reorder_due", label: "A customer's usual reorder is late" }] },
+    { name: "min_orders", label: "Ordered at least … times", type: "number", span: 1, section: "When", show: reorder, hint: "Fewer orders say little about a rhythm" },
+    { name: "grace_days", label: "Days past the expected date", type: "number", span: 1, section: "When", show: reorder, hint: "Expected = last order + the average time between orders" },
     { name: "status", label: "Status", type: "select", section: "When", show: v => v.trigger_type === "status_reached", options: STATUS_ORDER.filter(s => s !== "draft").map(s => ({ value: s, label: STATUS_LABEL[s] })),
       hint: "Only orders that reach this status after the rule was made" },
     { name: "date_field", label: "Date", type: "select", span: 1, section: "When", show: v => v.trigger_type === "date_within", options: Object.entries(DATE_LABEL).map(([value, label]) => ({ value, label: label.replace("the ", "") })) },
     { name: "within_days", label: "Within … days", type: "number", span: 1, section: "When", show: v => v.trigger_type === "date_within" },
     { name: "margin_pct", label: "Margin below %", type: "percent", section: "When", show: v => v.trigger_type === "margin_below", hint: "Only orders with a cost price on every line" },
-    { name: "order_type", label: "Order type", type: "select", span: 1, section: "Only if", options: [{ value: "EXW", label: "Only EXW" }, { value: "FOB", label: "Only FOB" }], hint: "Empty = both" },
-    { name: "only_if", label: "Still open", type: "select", span: 1, section: "Only if", options: Object.entries(ONLY_LABEL).map(([value, label]) => ({ value, label: label.replace(" is still open", " open").replace(/^the /, "").replace(/^\w/, c => c.toUpperCase()) })), hint: "Empty = always" },
-    { name: "action", label: "Then", type: "select", required: true, section: "Then", options: [{ value: "task", label: "Make a task on the order" }, { value: "flag", label: "Flag the order" }] },
-    { name: "task_title", label: "Task", section: "Then", show: isTask, placeholder: "Chase deposit PI {pi} ({customer})", hint: "{pi}, {customer} and {type} are filled in" },
-    { name: "task_due", label: "Due date", type: "select", span: 1, section: "Then", show: isTask, options: Object.entries(DUE_LABEL).map(([value, label]) => ({ value, label: label.replace(/^the /, "").replace(/^\w/, c => c.toUpperCase()) })) },
-    { name: "task_due_days", label: "Days after (minus = before)", type: "number", span: 1, section: "Then", show: isTask },
+    { name: "order_type", label: "Order type", type: "select", span: 1, section: "Only if", show: orders, options: [{ value: "EXW", label: "Only EXW" }, { value: "FOB", label: "Only FOB" }], hint: "Empty = both" },
+    { name: "only_if", label: "Still open", type: "select", span: 1, section: "Only if", show: orders, options: Object.entries(ONLY_LABEL).map(([value, label]) => ({ value, label: label.replace(" is still open", " open").replace(/^the /, "").replace(/^\w/, c => c.toUpperCase()) })), hint: "Empty = always" },
+    { name: "action", label: "Then", type: "select", section: "Then", show: orders, options: [{ value: "task", label: "Make a task on the order" }, { value: "flag", label: "Flag the order" }] },
+    { name: "task_title", label: "Task", section: "Then", show: v => isTask(v) && !reorder(v), placeholder: "Chase deposit PI {pi} ({customer})", hint: "{pi}, {customer} and {type} are filled in" },
+    { name: "task_title_reorder", label: "Task", section: "Then", show: reorder, placeholder: "Reorder due: {customer} · {product}", hint: "{customer}, {product}, {expected} and {days} are filled in. The task is linked to the customer." },
+    { name: "task_due", label: "Due date", type: "select", span: 1, section: "Then", show: v => isTask(v) && !reorder(v), options: Object.entries(DUE_LABEL).map(([value, label]) => ({ value, label: label.replace(/^the /, "").replace(/^\w/, c => c.toUpperCase()) })) },
+    { name: "task_due_days", label: "Days after (minus = before)", type: "number", span: 1, section: "Then", show: v => isTask(v) && !reorder(v) },
+    { name: "task_due_days_reorder", label: "Due … days after the task is made", type: "number", span: 1, section: "Then", show: reorder },
     { name: "assign_to", label: "For", type: "select", section: "Then", show: isTask, options: profiles.map(p => ({ value: p.user_id, label: p.full_name ?? p.role })), hint: "Empty = anyone. The person gets a notification." },
     { name: "flag_text", label: "Flag text", section: "Then", show: isFlag, placeholder: "Low margin: {margin}", hint: "{margin}, {pi} and {customer} are filled in" },
   ];
-  const initial = r ?? { active: true, trigger_type: "status_reached", status: "pi_sent", action: "task", task_due: "deposit_due_date", task_due_days: 0, only_if: "deposit_open" };
+  const initial = r ? { ...r, task_title_reorder: r.task_title, task_due_days_reorder: r.task_due_days } : { active: true, trigger_type: "status_reached", status: "pi_sent", action: "task", task_due: "deposit_due_date", task_due_days: 0, only_if: "deposit_open" };
   return <>
     <FormPage title={r ? r.name : "New rule"} back={{ to: "/admin/automations", label: "Automation rules" }} fields={fields} initial={initial} done="/admin/automations"
-      live={v => <div><div className="mb-1 text-xs font-semibold uppercase tracking-wider text-indigo-400">This rule</div>{ruleText({ ...v, margin_pct: v.margin_pct === "" || v.margin_pct == null ? null : Number(String(v.margin_pct).replace(",", ".")) / 100, assign_name: profiles.find(p => p.user_id === v.assign_to)?.full_name })}</div>}
+      live={v => <div><div className="mb-1 text-xs font-semibold uppercase tracking-wider text-indigo-400">This rule</div>{ruleText({ ...v, ...(reorder(v) ? { task_title: v.task_title_reorder, task_due_days: v.task_due_days_reorder } : {}), margin_pct: v.margin_pct === "" || v.margin_pct == null ? null : Number(String(v.margin_pct).replace(",", ".")) / 100, assign_name: profiles.find(p => p.user_id === v.assign_to)?.full_name })}</div>}
       onSubmit={async v => {
-        const body = { ...v, active: !!v.active, task_due_days: v.task_due_days ?? 0 };
+        const { task_title_reorder, task_due_days_reorder, ...rest } = v;
+        const body: any = reorder(v) ? { ...rest, action: "task", task_due: "today", task_title: task_title_reorder, task_due_days: task_due_days_reorder ?? 0, active: !!v.active }
+          : { ...rest, active: !!v.active, task_due_days: v.task_due_days ?? 0 };
+        if (!body.action) throw new Error("Choose what happens (Then)");
         if (r) await db.update("automation_rules", { id: r.id }, body); else await db.insert("automation_rules", body);
       }}
       aside={r && <Section title="This rule"><div className="space-y-3 px-5 py-4 text-sm text-gray-600">
