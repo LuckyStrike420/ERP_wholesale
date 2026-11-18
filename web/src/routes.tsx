@@ -13,6 +13,7 @@ import { PurchaseOrderDocument } from "@/modules/purchasing/PurchaseOrderDocumen
 import { CustomerContactForm, SupplierContactForm } from "@/modules/parties/Contacts";
 import { BatchDetail, BatchForm, BatchItemForm } from "@/modules/stock/Batches";
 import { ReportBuilder } from "@/modules/reports/Custom";
+import { Approvals, ApprovalPolicies, ApprovalPolicyForm } from "@/modules/approvals/Approvals";
 import { LineCost, OrderPurchaseOrder, OrderCorrection, OrderEdit, OrderInvoice, OrderLine, OrderPayment, OrderWriteOff } from "@/modules/orders/OrderForms";
 import { Ledger, ToPay, ToReceive, VoidPayment } from "@/modules/payments/Payments";
 import { PurchaseOrderDetail, PurchaseOrderEdit, PurchaseOrderInvoice, PurchaseOrderNew, PurchaseOrderPayment, PurchaseOrderWriteOff, PurchaseOrders } from "@/modules/purchasing/Purchasing";
@@ -38,6 +39,8 @@ export const ROUTES: Route[] = [
   r("/orders/:ref/documents/new", "orders", ShippingDocumentNew), r("/orders/:ref/documents/:doc", "orders", ShippingDocumentEdit), r("/orders/:ref/write-off", "orders", OrderWriteOff),
   r("/payments", "payments", ToReceive), r("/payments/suppliers", "payments", ToPay), r("/payments/ledger", "payments", Ledger),
   r("/payments/:id/void", "payments", VoidPayment),
+  r("/approvals", "approvals", () => <Approvals tab="open" />), r("/approvals/all", "approvals", () => <Approvals tab="all" />),
+  r("/admin/approvals", "admin", ApprovalPolicies), r("/admin/approvals/new", "admin", ApprovalPolicyForm), r("/admin/approvals/:id", "admin", ApprovalPolicyForm),
   r("/tasks", "tasks", Tasks), r("/tasks/new", "tasks", TaskForm), r("/tasks/:id", "tasks", TaskForm),
   r("/purchasing", "purchasing", PurchaseOrders), r("/purchasing/new", "purchasing", PurchaseOrderNew),
   r("/purchasing/:po", "purchasing", PurchaseOrderDetail), r("/purchasing/:po/edit", "purchasing", PurchaseOrderEdit),

@@ -5,7 +5,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AtSign, Bell, CheckCheck, CheckSquare, Receipt } from "lucide-react";
+import { AtSign, Bell, CheckCheck, CheckSquare, Receipt, ShieldCheck } from "lucide-react";
 import { useApp, useRows } from "./store";
 import { useNav } from "./router";
 import { customerPath, orderPath, poPath, supplierPath } from "./paths";
@@ -16,7 +16,7 @@ const ago = (v: string) => {
   const s = (Date.now() - new Date(v).getTime()) / 1000;
   return s < 60 ? "just now" : s < 3600 ? `${Math.floor(s / 60)} min ago` : s < 86400 ? `${Math.floor(s / 3600)} h ago` : `${Math.floor(s / 86400)} d ago`;
 };
-const where = (n: any) => n.task_id ? taskPath({ id: n.task_id }) : n.sales_order_id ? orderPath({ pi_number: n.pi_number, id: n.sales_order_id })
+const where = (n: any) => n.kind === "approval_request" ? "/approvals" : n.task_id ? taskPath({ id: n.task_id }) : n.sales_order_id ? orderPath({ pi_number: n.pi_number, id: n.sales_order_id })
   : n.purchase_order_id ? poPath({ po_number: n.po_number }) : n.customer_id ? customerPath({ name: n.customer_name }) : n.supplier_id ? supplierPath({ name: n.supplier_name }) : "/";
 const about = (n: any) => [n.pi_number && `PI ${n.pi_number}`, n.po_number && `PO ${n.po_number}`, n.customer_name, n.supplier_name].filter(Boolean).join(" · ");
 
@@ -76,8 +76,8 @@ export function NotificationBell({ className }: { className?: string }) {
           {!items.length && <li className="px-4 py-8 text-center text-sm text-gray-500">Nothing yet. You get a message here when a task is assigned to you or someone mentions you with @{session?.name ?? "your name"}.</li>}
           {items.map(n => <li key={n.id}>
             <button type="button" onClick={() => openItem(n)} className={cn("flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50", !n.read_at && "bg-indigo-50/40")}>
-              <span className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full", n.kind === "mention" ? "bg-amber-50 text-amber-700" : "bg-indigo-50 text-indigo-600")}>
-                {n.kind === "mention" ? <AtSign className="h-3.5 w-3.5" /> : <CheckSquare className="h-3.5 w-3.5" />}</span>
+              <span className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full", n.kind === "mention" ? "bg-amber-50 text-amber-700" : n.kind.startsWith("approval") ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-600")}>
+                {n.kind === "mention" ? <AtSign className="h-3.5 w-3.5" /> : n.kind.startsWith("approval") ? <ShieldCheck className="h-3.5 w-3.5" /> : <CheckSquare className="h-3.5 w-3.5" />}</span>
               <span className="min-w-0 flex-1">
                 <span className={cn("block text-sm", n.read_at ? "text-gray-700" : "font-semibold text-gray-900")}>{n.title}</span>
                 {n.body && <span className="mt-0.5 line-clamp-2 block text-xs text-gray-600">{n.body}</span>}

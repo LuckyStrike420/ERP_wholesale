@@ -1,3 +1,4 @@
+import { OrderApproval } from "@/modules/approvals/Approvals";
 import { useMemo, useState } from "react";
 import { AlertTriangle, Ban, Flag, ClipboardList, Copy, FileText, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -74,7 +75,7 @@ export default function OrderDetail() {
     </PageHeader>
 
     <BlockGrid lay={lay} blocks={[
-      { id: "path", title: "Status path", node: <div className="space-y-3"><OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
+      { id: "path", title: "Status path", node: <div className="space-y-3"><OrderApproval o={o} /><OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
         {flags.length > 0 && <div className="-mt-3 flex flex-wrap gap-2">{flags.map(f => <span key={f.rule_id} title={`Rule: ${f.rule_name}`} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800"><Flag className="h-3.5 w-3.5" />{f.flag_text}</span>)}</div>}</div> },
       { id: "stats", title: "Key figures", node: <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Stat label="Total to receive" value={money(o.total_receivable, cur)} hint={Number(o.adjustments) ? `incl. corrections ${money(o.adjustments, cur)}` : `${o.line_count} line${o.line_count === 1 ? "" : "s"}`} />

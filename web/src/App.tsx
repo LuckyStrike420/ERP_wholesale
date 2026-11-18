@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, BarChart3, Boxes, CheckSquare, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, Package, Plus, Receipt, Search, Settings, Ship, ShoppingCart, Tags, Users, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Boxes, CheckSquare, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, Package, Plus, Receipt, Search, Settings, Ship, ShoppingCart, Tags, Users, X, ShieldCheck } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,11 +11,12 @@ import { cn } from "@/lib/utils";
 import { ROUTES } from "@/routes";
 import { CommandPalette, shortcutLabel, showCommandPalette } from "@/app/CommandPalette";
 import { SidebarRecords } from "@/app/Favorites";
+import { usePendingApprovals } from "@/modules/approvals/Approvals";
 import { NotificationBell } from "@/app/Notifications";
 import { ErrorDialog } from "@/app/notify";
 
 const NAV: { group: string; items: { to: string; section: string; label: string; icon: any }[] }[] = [
-  { group: "", items: [{ to: "/", section: "dashboard", label: "Overview", icon: LayoutDashboard }, { to: "/payments", section: "payments", label: "Payments", icon: Receipt }, { to: "/tasks", section: "tasks", label: "Tasks", icon: CheckSquare }] },
+  { group: "", items: [{ to: "/", section: "dashboard", label: "Overview", icon: LayoutDashboard }, { to: "/payments", section: "payments", label: "Payments", icon: Receipt }, { to: "/tasks", section: "tasks", label: "Tasks", icon: CheckSquare }, { to: "/approvals", section: "approvals", label: "Approvals", icon: ShieldCheck }] },
   { group: "Sales", items: [{ to: "/orders", section: "orders", label: "Orders", icon: ShoppingCart }, { to: "/customers", section: "customers", label: "Customers", icon: Users }, { to: "/prices", section: "prices", label: "Price agreements", icon: Tags }] },
   { group: "Purchasing", items: [{ to: "/purchasing", section: "purchasing", label: "Purchase orders", icon: ClipboardList }, { to: "/suppliers", section: "suppliers", label: "Suppliers", icon: Factory }] },
   { group: "Logistics", items: [{ to: "/shipping", section: "shipping", label: "Shipping", icon: Ship }, { to: "/stock", section: "stock", label: "NL stock", icon: Boxes }, { to: "/products", section: "products", label: "Products", icon: Package }] },
@@ -41,6 +42,7 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
   useEffect(() => { appDb.rpc<number>("run_automations").then((n: number) => { if (n) refresh(); }).catch(() => undefined); }, [appDb]);   // eslint-disable-line react-hooks/exhaustive-deps
   const tasks = useRows("v_tasks", { eq: { status: "open" } }).rows;
   const tasksLate = tasks.filter(t => t.state === "overdue").length, tasksToday = tasks.filter(t => t.state === "today").length;
+  const approvals = usePendingApprovals();
   const Page = hit?.route.page;
   const nav = <nav className="flex-1 overflow-y-auto px-3 py-4">
     {NAV.map(g => (
@@ -51,6 +53,7 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
             className={cn("flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors", on ? "bg-gray-100 font-medium text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900")}>
             <i.icon className={cn("h-4 w-4 shrink-0", on ? "text-indigo-600" : "text-gray-400")} /><span className="flex-1">{i.label}</span>
             {i.section === "tasks" && tasksLate + tasksToday > 0 && <span title={`${tasksLate} overdue, ${tasksToday} due today`} className={cn("rounded-full px-1.5 text-[11px] font-semibold tabular-nums", tasksLate ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800")}>{tasksLate + tasksToday}</span>}
+            {i.section === "approvals" && approvals > 0 && <span title={`${approvals} to decide`} className="rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold tabular-nums text-amber-800">{approvals}</span>}
             {i.section === "payments" && badge > 0 && <span title={`${overdue} overdue, ${reminders} EXW reminder(s)`} className="rounded-full bg-rose-100 px-1.5 text-[11px] font-semibold tabular-nums text-rose-700">{badge}</span>}
           </Link>; })}
       </div>))}

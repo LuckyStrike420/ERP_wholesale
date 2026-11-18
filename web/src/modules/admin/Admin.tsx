@@ -18,7 +18,7 @@ const changed = (a: any) => {
 };
 export const AdminHead = () => <>
   <PageHeader title="Admin" sub="Settings, payment terms, exchange rates, users, the audit log and the workbook import." />
-  <TabLinks tabs={[{ to: "/admin", label: "Settings" }, { to: "/admin/payment-terms", label: "Payment terms" }, { to: "/admin/automations", label: "Automations" }, { to: "/admin/rates", label: "Exchange rates" }, { to: "/admin/users", label: "Users" }, { to: "/admin/audit", label: "Audit log" }, { to: "/admin/import", label: "Import" }]} />
+  <TabLinks tabs={[{ to: "/admin", label: "Settings" }, { to: "/admin/payment-terms", label: "Payment terms" }, { to: "/admin/automations", label: "Automations" }, { to: "/admin/approvals", label: "Approvals" }, { to: "/admin/rates", label: "Exchange rates" }, { to: "/admin/users", label: "Users" }, { to: "/admin/audit", label: "Audit log" }, { to: "/admin/import", label: "Import" }]} />
 </>;
 
 export function Settings() {

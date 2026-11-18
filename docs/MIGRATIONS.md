@@ -25,6 +25,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0019_automations.sql` | `0019_automations` (plus pg_cron-taak `run-automations`, elk uur) | ja (18 nov 2026) |
 | `0020_user_layouts.sql` | `0020_user_layouts` | ja (18 nov 2026) |
 | `0021_reports.sql` | `0021_reports` | ja (18 nov 2026) |
+| `0022_approvals.sql` | `0022_approvals` | ja (18 nov 2026) |
 
 ## Regels
 
