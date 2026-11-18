@@ -73,7 +73,7 @@ export function CustomerDetail() {
       <Stat label="Last payment" value={lastPay ? date(lastPay) : "–"} hint={lastPay ? "received" : "nothing received yet"} />
     </div> },
       { id: "contacts", title: "Contacts", size: "half", node: <ContactsSection party="customer" p={c} /> },
-      { id: "terms", title: "Payment terms", size: "half", node: <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)], ["Delivery", c.default_incoterm ? <span title={incotermHint(c.default_incoterm)}>{INCOTERMS.find(t => t.code === c.default_incoterm)?.label}</span> : "Follows the order type"]]} /></Section> },
+      { id: "terms", title: "Payment terms", size: "half", node: <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)], ["Usual terms", c.default_incoterm ? <span title={incotermHint(c.default_incoterm)}>{INCOTERMS.find(t => t.code === c.default_incoterm)?.label}</span> : "As their last order"]]} /></Section> },
       { id: "details", title: "Details", size: "half", node: <Section title="Details"><KV items={[["Address", c.address || c.country ? <span className="whitespace-pre-line">{[c.address, c.country].filter(Boolean).join("\n")}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section> },
       { id: "notes", title: "Notes", size: "half", node: <NotesSection party="customer" p={c} /> },
       { id: "health", title: "Health", size: "half", node: <CustomerHealth customerId={c.id} /> },
@@ -109,8 +109,8 @@ export function CustomerForm() {
   const fields: Field[] = [...customerFields.slice(0, -1),
     { name: "exw_term", label: "EXW payment term", type: "select", options: opts(row?.exw?.payment_term_id), section: "Payment terms" },
     { name: "fob_term", label: "FOB payment term", type: "select", options: opts(row?.fob?.payment_term_id), section: "Payment terms", hint: "Terms are managed under Admin → Payment terms." },
-    { name: "default_incoterm", label: "Usual delivery terms", type: "select", options: INCOTERM_OPTIONS, section: "Delivery",
-      hint: "Filled in on new orders (can be changed per order). Empty = follows the order type: EXW or FOB." },
+    { name: "default_incoterm", label: "Usual terms", type: "select", options: INCOTERM_OPTIONS, section: "Delivery",
+      hint: "Filled in on new orders (can be changed per order). Empty = the terms of the customer's last order." },
     customerFields[customerFields.length - 1]];
   return <FormPage title={row ? `Edit ${row.name}` : "New customer"} sub="A new term applies to new orders; existing orders keep the term they were created with (change it on the order)."
     back={row ? { to: customerPath(row), label: row.name } : { to: "/customers", label: "Customers" }} fields={fields}

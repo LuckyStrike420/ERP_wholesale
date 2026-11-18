@@ -30,8 +30,8 @@ export default function OrdersList() {
   const views = useRows("saved_views", { eq: { page: "orders" }, order: [["name", "asc"]] }).rows;
   const flags = useRows("v_order_flags").rows;
   const delivery = useRows("v_order_delivery").rows;
-  // the order type, plus the delivery term when it is another one (e.g. "EXW · DDP")
-  const typeOf = (o: any) => { const t = delivery.find(d => d.sales_order_id === o.id)?.incoterm; return t && t !== o.order_type ? `${o.order_type} · ${t}` : o.order_type; };
+  // the order's terms (FOB, EXW, DDP …); the type filter still groups them as FOB (China) and EXW (NL stock)
+  const typeOf = (o: any) => delivery.find(d => d.sales_order_id === o.id)?.incoterm ?? o.order_type;
   const flagOf = (id: string) => flags.filter(f => f.sales_order_id === id).map(f => f.flag_text).join(" · ");
   const [naming, setNaming] = useState<string | null>(null);
 
@@ -67,7 +67,7 @@ export default function OrdersList() {
       <select aria-label="Status" className={selectClass + " w-48"} value={status} onChange={e => set("status", e.target.value === "open" ? "" : e.target.value)}>
         <option value="open">Open orders</option><option value="unpaid">With an open amount</option><option value="overdue">Overdue or reminder</option><option value="all">All orders</option>
         {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-      <select aria-label="Type" className={selectClass + " w-32"} value={type} onChange={e => set("type", e.target.value)}><option value="">EXW + FOB</option><option>EXW</option><option>FOB</option></select>
+      <select aria-label="Type" className={selectClass + " w-32"} value={type} onChange={e => set("type", e.target.value)}><option value="">All terms</option><option value="EXW">From NL stock (EUR)</option><option value="FOB">FOB from China (USD)</option></select>
       <Combobox label="Customer" className="w-52" value={customer || null} onChange={v => set("customer", v ?? "")} placeholder="All customers" options={customers.map(c => ({ value: c.id, label: c.name }))} />
       <select aria-label="Payment" className={selectClass + " w-40"} value={payment} onChange={e => set("payment", e.target.value)}><option value="">Any payment</option>
         {Object.entries(PAYMENT_LABEL).filter(([k]) => k !== "draft").map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>

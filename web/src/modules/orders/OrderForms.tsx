@@ -6,12 +6,13 @@ import { orderPath } from "@/app/paths";
 import { FormPage, KV, Loading, NotFound, PageHeader, Pill, Section, type Field } from "@/app/ui";
 import { date, money, SOURCE_LABEL, termText, today } from "@/app/format";
 import { useOrder } from "./data";
-import { INCOTERM_OPTIONS } from "./incoterms";
+import { INCOTERM_OPTIONS, typeFor } from "./incoterms";
 
-const TYPE_OPTIONS = [{ value: "EXW", label: "EXW (euro)" }, { value: "FOB", label: "FOB (dollar)" }];
 export const orderFields = (customers: any[]): Field[] => [
   { name: "customer_id", label: "Customer", type: "select", required: true, options: customers.map(c => ({ value: c.id, label: c.name })) },
-  { name: "order_type", label: "Type", type: "select", required: true, span: 1, options: TYPE_OPTIONS },
+  // one field for the terms; the order type (FOB in dollars, EXW from NL stock in euros) follows from it
+  { name: "incoterm", label: "Terms", type: "select", required: true, options: INCOTERM_OPTIONS, hint: "FOB: from China in dollars. EXW, FCA, DAP, DDP: from NL stock in euros; with DAP and DDP we arrange the transport." },
+  { name: "delivery_place", label: "Delivery place", span: 1, hint: "On the PI after the terms, e.g. DDP Hamburg" },
   { name: "pi_number", label: "PI#", span: 1, hint: "Leave empty to save as a draft" },
   { name: "customer_po", label: "Customer PO#", span: 1 },
   { name: "po_date", label: "PO date", type: "date", span: 1 },
@@ -52,13 +53,11 @@ function OrderEditForm({ o, customers, db }: { o: any; customers: any[]; db: any
       { name: "deposit_pct", label: "Deposit % (exception)", type: "percent", span: 1, section: "Payment terms", hint: "Leave as it is to follow the term" },
       { name: "deposit_due_date", label: "Deposit due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = from the payment term" },
       { name: "balance_due_date", label: "Balance due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = from the payment term" },
-      { name: "incoterm", label: "Delivery terms", type: "select", span: 1, section: "Delivery", required: true, options: INCOTERM_OPTIONS,
-        hint: "DAP and DDP: we arrange and pay the transport; add its cost on the order page" },
-      { name: "delivery_place", label: "Delivery place", span: 1, section: "Delivery", hint: "Shown on the PI after the term, e.g. DDP Hamburg" },
       { name: "vat_applies", label: "Charge Dutch VAT on this order", type: "checkbox", section: "VAT", hint: "Set automatically for EXW with a customer in the Netherlands. The rate (21% or 9%) comes from each product." }] as Field[]),
     { name: "notes", label: "Note", type: "textarea", section: "Note" }];
   return <FormPage title={`Edit ${o.pi_number ? `PI ${o.pi_number}` : "draft order"}`} back={backTo(o)} fields={fields} initial={{ ...raw, incoterm: raw.incoterm ?? raw.order_type }} aside={<OrderAside o={o} />}
-    onSubmit={async v => { const patch = { ...v }; if (raw.status === "draft" && v.pi_number) patch.status = "pi_sent";
+    onSubmit={async v => { const patch = { ...v };
+      if (patch.incoterm) patch.order_type = typeFor(patch.incoterm); if (raw.status === "draft" && v.pi_number) patch.status = "pi_sent";
       // a new term brings its own deposit %: only send the % when it was changed by hand
       if (patch.payment_term_id !== raw.payment_term_id && Number(patch.deposit_pct) === Number(raw.deposit_pct)) delete patch.deposit_pct;
       await db.update("sales_orders", { id: o.id }, patch); return orderPath({ ...o, pi_number: v.pi_number ?? o.pi_number }); }} />;

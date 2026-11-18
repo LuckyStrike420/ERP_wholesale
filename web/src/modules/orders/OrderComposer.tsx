@@ -19,7 +19,7 @@ import { date, money, pct, qty, SOURCE_LABEL, termText, today } from "@/app/form
 import { cn } from "@/lib/utils";
 import { Combobox } from "@/app/Combobox";
 import { quickCreate } from "@/app/quickCreate";
-import { INCOTERMS, incotermHint, weArrangeTransport } from "./incoterms";
+import { INCOTERMS, incotermHint, typeFor, weArrangeTransport } from "./incoterms";
 
 type Line = { key: number; product_id: string; quantity: string; unit_price: string; batch_item_id: string; batch_touched?: boolean;
   touched: boolean; source: string | null; suggestion: { price: number; source: string; moq: number | null } | null };
@@ -41,7 +41,7 @@ export default function OrderComposer() {
   const fromOrder = fromRef ? findOrder(orders.rows, fromRef) : undefined;
   const fromLines = useRows(fromOrder ? "v_order_lines" : null, { eq: { sales_order_id: fromOrder?.id }, order: [["line_no", "asc"]] });
 
-  const [h, setH] = useState({ customer_id: "", order_type: "FOB", pi_number: "", customer_po: "", po_date: today(), notes: "", payment_term_id: "", incoterm: "", delivery_place: "" });
+  const [h, setH] = useState({ customer_id: "", order_type: "FOB", pi_number: "", customer_po: "", po_date: today(), notes: "", payment_term_id: "", incoterm: "FOB", delivery_place: "" });
   const [lines, setLines] = useState<Line[]>([blank()]);
   const [preview, setPreview] = useState<any>(null); const [calc, setCalc] = useState(false);
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
@@ -56,16 +56,19 @@ export default function OrderComposer() {
   // the order's term: chosen here, otherwise the customer's term for this type
   const termId = h.payment_term_id || term?.payment_term_id || "";
   const payTerm = payTerms.find(t => t.id === termId);
-  // delivery term: chosen here, otherwise the customer's usual term, otherwise the one that matches the type
+  // one choice for the terms; the order type (FOB in dollars / EXW from NL stock in euros) follows from it
   const customer = customers.rows.find(c => c.id === h.customer_id);
-  const incoterm = h.incoterm || customer?.default_incoterm || h.order_type;
+  const incoterm = h.incoterm;
+  const deliveries = useRows("v_order_delivery").rows;
+  const termOf = (o: any) => deliveries.find(d => d.sales_order_id === o?.id)?.incoterm ?? o?.order_type;
+  const setTerms = (v: string) => setH(x => ({ ...x, incoterm: v, order_type: typeFor(v), payment_term_id: typeFor(v) === x.order_type ? x.payment_term_id : "" }));
 
   // start: suggested PI#, or a copy of an earlier order
   useEffect(() => {
     if (started.current || orders.loading || products.loading || (fromRef && (fromLines.loading || !fromOrder))) return;
     started.current = true;
     if (fromOrder) {
-      setH(x => ({ ...x, customer_id: fromOrder.customer_id, order_type: fromOrder.order_type, pi_number: nextPi }));
+      const t = termOf(fromOrder); setH(x => ({ ...x, customer_id: fromOrder.customer_id, order_type: typeFor(t), incoterm: t, pi_number: nextPi }));
       setLines(fromLines.rows.length ? fromLines.rows.map(l => ({ ...blank(), product_id: l.product_id, quantity: String(l.quantity), unit_price: String(l.unit_price), touched: true, source: "copied" })) : [blank()]);
     } else setH(x => ({ ...x, pi_number: nextPi }));
   }, [orders.loading, products.loading, fromLines.loading, fromOrder, fromRef, nextPi, fromLines.rows]);
@@ -81,7 +84,9 @@ export default function OrderComposer() {
   }, [h.order_type, productKey, stock.length]);   // eslint-disable-line react-hooks/exhaustive-deps
   const pickCustomer = (id: string) => {
     const last = orders.rows.find(o => o.customer_id === id && o.status !== "cancelled");
-    setH(x => ({ ...x, customer_id: id, order_type: last?.order_type ?? x.order_type, payment_term_id: "", incoterm: "" }));
+    // the customer's usual terms, else those of their last order
+    const t = customers.rows.find(c => c.id === id)?.default_incoterm ?? (last ? termOf(last) : h.incoterm);
+    setH(x => ({ ...x, customer_id: id, order_type: typeFor(t), incoterm: t, payment_term_id: "" }));
   };
   const copyFrom = async (o: any) => {
     try { const rows = await db.select<any>("v_order_lines", { eq: { sales_order_id: o.id }, order: [["line_no", "asc"]] });
@@ -167,11 +172,10 @@ export default function OrderComposer() {
                 {lastOrder && <> · last order <Link to={orderPath(lastOrder)} className="text-indigo-600 hover:underline">PI {lastOrder.pi_number ?? "draft"}</Link> on {date(lastOrder.po_date)}</>}</p>}
             </div>
             <div className="col-span-2">
-              <span className="mb-1.5 block text-sm font-medium text-gray-700">Type</span>
-              <div className="inline-flex rounded-md border border-gray-300 p-0.5" role="radiogroup" aria-label="Order type">
-                {[["FOB", "FOB · USD"], ["EXW", "EXW · EUR"]].map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={h.order_type === v} onClick={() => setH(x => ({ ...x, order_type: v, payment_term_id: "" }))}
-                  className={cn("rounded px-3 py-1.5 text-sm font-medium transition-colors", h.order_type === v ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-100")}>{l}</button>)}
-              </div>
+              <Label htmlFor="incoterm" className="mb-1.5 block text-sm font-medium text-gray-700">Terms</Label>
+              <select id="incoterm" className={selectClass + " w-full"} value={incoterm} onChange={e => setTerms(e.target.value)}>
+                {INCOTERMS.map(t => <option key={t.code} value={t.code}>{t.label}{t.code === customer?.default_incoterm ? " (customer's usual)" : ""}</option>)}</select>
+              <p className="mt-1.5 text-xs text-gray-500">{incotermHint(incoterm)}</p>
             </div>
             <Field id="pi" label="PI#" value={h.pi_number} onChange={v => setH(x => ({ ...x, pi_number: v }))} hint={nextPi && h.pi_number === nextPi ? "Next free number" : "Empty = save as draft"} />
             <Field id="cpo" label="Customer PO#" value={h.customer_po} onChange={v => setH(x => ({ ...x, customer_po: v }))} />
@@ -181,12 +185,6 @@ export default function OrderComposer() {
               <select id="term" className={selectClass + " w-full"} value={termId} onChange={e => setH(x => ({ ...x, payment_term_id: e.target.value }))}>
                 <option value="">–</option>{payTerms.filter(t => t.active || t.id === termId).map(t => <option key={t.id} value={t.id}>{t.name}{t.id === term?.payment_term_id ? " (customer's term)" : ""}</option>)}</select>
               {payTerm && <p className="mt-1.5 text-xs text-gray-500">{termText(payTerm)}</p>}
-            </div>
-            <div className="col-span-2">
-              <Label htmlFor="incoterm" className="mb-1.5 block text-sm font-medium text-gray-700">Delivery terms</Label>
-              <select id="incoterm" className={selectClass + " w-full"} value={incoterm} onChange={e => setH(x => ({ ...x, incoterm: e.target.value }))}>
-                {INCOTERMS.map(t => <option key={t.code} value={t.code}>{t.label}{t.code === customer?.default_incoterm ? " (customer's usual)" : ""}</option>)}</select>
-              <p className="mt-1.5 text-xs text-gray-500">{incotermHint(incoterm)}</p>
             </div>
             <Field wide id="place" label="Delivery place" value={h.delivery_place} onChange={v => setH(x => ({ ...x, delivery_place: v }))} hint={weArrangeTransport(incoterm) ? "Where we deliver, e.g. the customer's warehouse" : "Optional"} />
           </div>

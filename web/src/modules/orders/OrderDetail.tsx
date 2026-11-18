@@ -68,7 +68,7 @@ export default function OrderDetail() {
   return <>
     <PageHeader back={{ to: "/orders", label: "Orders" }}
       title={<span className="flex flex-wrap items-center gap-3">{o.pi_number ? `PI ${o.pi_number}` : "Draft order"}<StatusPill status={o.status} /><PaymentPill status={o.payment_status} />{rec && <FavoriteStar r={rec} />}</span>}
-      sub={<>{customer ? <Link to={customerPath(customer)} className="text-gray-700 hover:text-indigo-600">{o.customer_name}</Link> : o.customer_name} · {o.order_type} · {cur}{delivery && delivery.incoterm !== o.order_type ? ` · ${incotermText(delivery.incoterm, delivery.delivery_place)}` : ""}{o.customer_po ? ` · customer PO ${o.customer_po}` : ""}</>}>
+      sub={<>{customer ? <Link to={customerPath(customer)} className="text-gray-700 hover:text-indigo-600">{o.customer_name}</Link> : o.customer_name} · {delivery ? incotermText(delivery.incoterm, delivery.delivery_place) : o.order_type} · {cur}{o.customer_po ? ` · customer PO ${o.customer_po}` : ""}</>}>
       {!["draft", "cancelled"].includes(o.status) && can("register_payments") && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
       <LinkButton to={`${base}/edit`} variant="outline"><Pencil />Edit</LinkButton>
       {o.pi_number && <LinkButton to={`${base}/pi`} variant="outline"><FileText />PI (PDF)</LinkButton>}

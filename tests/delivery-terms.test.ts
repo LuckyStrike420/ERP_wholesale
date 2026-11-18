@@ -39,3 +39,21 @@ test('delivery terms: customer default on new orders; DAP/DDP without transport 
   const c = await one<any>(db, `select incoterm, delivery_place from sales_orders where pi_number = $1`, [ref]);
   assert.deepEqual([c.incoterm, c.delivery_place], ['DAP', 'Hamburg']);
 });
+
+test('one terms field: the term sets the order type, a type change alone resets the term', async () => {
+  const db = await freshDb(); const s = await seed(db);
+  const o = await mkOrder(db, { pi: 'U1', type: 'EXW', customer: s.cust, lines: [{ product: s.fixed, qty: 10, price: 12 }] });
+  await db.query(`update sales_orders set incoterm = 'DDP' where id = $1`, [o]);
+  let r = await one<any>(db, `select order_type, incoterm from sales_orders where id = $1`, [o]);
+  assert.deepEqual([r.order_type, r.incoterm], ['EXW', 'DDP']);
+  await db.query(`update sales_orders set incoterm = 'FOB' where id = $1`, [o]);
+  r = await one<any>(db, `select order_type, incoterm from sales_orders where id = $1`, [o]);
+  assert.deepEqual([r.order_type, r.incoterm], ['FOB', 'FOB']);
+  await db.query(`update sales_orders set order_type = 'EXW' where id = $1`, [o]);
+  r = await one<any>(db, `select order_type, incoterm from sales_orders where id = $1`, [o]);
+  assert.deepEqual([r.order_type, r.incoterm], ['EXW', 'EXW']);
+  // a usual term that does not fit the type is not used
+  await db.query(`update customers set default_incoterm = 'DDP' where id = $1`, [s.cust]);
+  const f = await mkOrder(db, { pi: 'U2', type: 'FOB', customer: s.cust, lines: [{ product: s.fixed, qty: 10, price: 12 }] });
+  assert.equal((await one<any>(db, `select incoterm from sales_orders where id = $1`, [f])).incoterm, 'FOB');
+});
