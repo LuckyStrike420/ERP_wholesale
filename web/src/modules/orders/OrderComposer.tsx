@@ -223,6 +223,8 @@ export default function OrderComposer() {
         <Section title="Order total" action={calc && <span className="text-xs text-gray-400">calculating…</span>}>
           <div className="space-y-2 px-5 py-4 text-sm">
             <Row label="Order value" value={o ? money(o.order_value, cur) : "–"} strong />
+            {Number(o?.vat_amount) > 0 && <Row label="VAT (Dutch customer, EXW)" value={money(o.vat_amount, cur)} />}
+            {Number(o?.vat_amount) > 0 && <Row label="Total incl. VAT" value={money(o.total_receivable, cur)} strong />}
             <Row label="Purchase cost" value={o ? money(o.total_cost, cur) : "–"} />
             <Row label="Margin" value={o ? <span className={missing ? "text-amber-700" : ""}>{money(o.margin, cur)} · {o.margin_pct == null ? "incomplete" : pct(o.margin_pct)}</span> : "–"} />
             <div className="border-t border-gray-100 pt-2" />

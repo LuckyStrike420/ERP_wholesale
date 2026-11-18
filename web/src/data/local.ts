@@ -37,7 +37,9 @@ async function build(db: PGlite, empty = false) {
   // imported rows are loaded as they are: no triggers, so nothing is recalculated or re-audited
   await db.exec("set session_replication_role = replica");
   for (const t of seed.tables as string[]) {
-    if (seed.rows[t]?.length) await db.query(`insert into ${id(t)} select * from jsonb_populate_recordset(null::${id(t)}, $1::jsonb)`, [JSON.stringify(seed.rows[t])]);
+    // only the columns the seed has: columns added since then get their default
+    if (seed.rows[t]?.length) { const cols = Object.keys(seed.rows[t][0]).map(id).join(", ");
+      await db.query(`insert into ${id(t)} (${cols}) select ${cols} from jsonb_populate_recordset(null::${id(t)}, $1::jsonb)`, [JSON.stringify(seed.rows[t])]); }
   }
   await db.exec("set session_replication_role = origin");
   // the imported customer terms get the payment term with the same deposit % (as migration 0015 did on Supabase)

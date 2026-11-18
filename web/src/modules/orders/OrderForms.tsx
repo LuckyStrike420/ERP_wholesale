@@ -50,7 +50,8 @@ function OrderEditForm({ o, customers, db }: { o: any; customers: any[]; db: any
         hint: "Another term also changes the deposit %, and a deposit already fixed on the PI is recalculated." },
       { name: "deposit_pct", label: "Deposit % (exception)", type: "percent", span: 1, section: "Payment terms", hint: "Leave as it is to follow the term" },
       { name: "deposit_due_date", label: "Deposit due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = from the payment term" },
-      { name: "balance_due_date", label: "Balance due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = from the payment term" }] as Field[]),
+      { name: "balance_due_date", label: "Balance due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = from the payment term" },
+      { name: "vat_applies", label: "Charge Dutch VAT on this order", type: "checkbox", section: "VAT", hint: "Set automatically for EXW with a customer in the Netherlands. The rate (21% or 9%) comes from each product." }] as Field[]),
     { name: "notes", label: "Note", type: "textarea", section: "Note" }];
   return <FormPage title={`Edit ${o.pi_number ? `PI ${o.pi_number}` : "draft order"}`} back={backTo(o)} fields={fields} initial={raw} aside={<OrderAside o={o} />}
     onSubmit={async v => { const patch = { ...v }; if (raw.status === "draft" && v.pi_number) patch.status = "pi_sent";

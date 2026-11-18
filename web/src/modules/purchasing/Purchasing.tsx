@@ -88,7 +88,7 @@ export function PurchaseOrderDetail() {
     </PageHeader>
     <BlockGrid lay={lay} blocks={[
       { id: "stats", title: "Key figures", node: <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      <Stat label="To pay" value={money(p.payable, cur)} hint={p.invoice_amount == null ? "expected, no invoice yet" : `invoice ${p.invoice_number ?? ""}`} />
+      <Stat label="To pay" value={money(p.payable, cur)} hint={`${p.invoice_amount == null ? "expected, no invoice yet" : `invoice ${p.invoice_number ?? ""}`}${Number(p.vat_amount) ? ` · incl. VAT ${money(p.vat_amount, cur)}` : ""}`} />
       <Stat label="Paid" value={money(p.paid, cur)} />
       <Stat label="Outstanding" value={money(p.outstanding, cur)} tone={Number(p.overdue_amount) > 0 ? "bad" : Number(p.outstanding) > 0.01 ? "warn" : "good"}
         hint={p.balance_due_date || p.deposit_due_date ? `due ${date(p.deposit_due_date ?? p.balance_due_date)}` : "no due date set"} />
@@ -139,6 +139,7 @@ function POEditForm({ p, db }: { p: any; db: any }) {
   if (!raw) return <Loading />;
   const fields: Field[] = [{ name: "po_date", label: "PO date", type: "date", span: 1 }, { name: "deposit_pct", label: "Deposit %", type: "percent", span: 1 },
     { name: "deposit_due_date", label: "Deposit due date", type: "date", span: 1, section: "Payment terms" }, { name: "balance_due_date", label: "Balance due date", type: "date", span: 1, section: "Payment terms" },
+    { name: "vat_applies", label: "Dutch VAT on this PO", type: "checkbox", section: "VAT", hint: "Set automatically for EXW with a supplier in the Netherlands. The rate (21% or 9%) comes from each product." },
     { name: "notes", label: "Note", type: "textarea", section: "Note" }];
   return <FormPage title={`Edit PO ${p.po_number}`} back={backTo(p)} fields={fields} initial={raw} aside={<POAside p={p} />}
     onSubmit={async v => { await db.update("purchase_orders", { id: p.id }, v); }} />;
@@ -164,7 +165,7 @@ function POInvoiceForm({ p, db }: { p: any; db: any }) {
   const inv = rows[0];
   return <FormPage title="Supplier invoice" back={backTo(p)} aside={<POAside p={p} />} initial={inv ?? { invoice_date: today(), amount: p.expected_amount }}
     sub="The supplier's invoice stands: it replaces the expected amount, makes the cost prices of the linked lines final, and any difference goes into the margin."
-    fields={[{ name: "invoice_number", label: "Supplier invoice #", span: 1 }, { name: "invoice_date", label: "Invoice date", type: "date", span: 1 }, { name: "amount", label: `Invoice amount (${p.currency})`, type: "number", required: true }]}
+    fields={[{ name: "invoice_number", label: "Supplier invoice #", span: 1 }, { name: "invoice_date", label: "Invoice date", type: "date", span: 1 }, { name: "amount", label: `Invoice amount${p.vat_applies ? " without VAT" : ""} (${p.currency})`, type: "number", required: true, hint: p.vat_applies ? "The VAT is added on top, at the products' rates. This amount is also the cost price." : undefined }]}
     onSubmit={async v => { if (inv) await db.update("supplier_invoices", { id: inv.id }, v); else await db.insert("supplier_invoices", { ...v, purchase_order_id: p.id }); }} />;
 }
 

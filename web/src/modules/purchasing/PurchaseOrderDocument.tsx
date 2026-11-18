@@ -3,6 +3,7 @@
  * Lines are the order lines linked to this PO, at the purchase price the system works out (the same figures as the PO page).
  * "Download PDF" opens the print dialog; choose "Save as PDF".
  */
+import { vatSplit } from "@/app/vat";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRows } from "@/app/store";
@@ -18,6 +19,7 @@ export function PurchaseOrderDocument() {
   const { po } = useParams();
   const { rows, loading } = useRows("v_purchase_orders", { eq: { po_number: po } }); const p = rows[0];
   const lines = useRows(p ? "v_order_lines" : null, { eq: { purchase_order_id: p?.id }, order: [["pi_number", "asc"], ["line_no", "asc"]] });
+  const rawLines = useRows(p ? "sales_order_lines" : null, { eq: { purchase_order_id: p?.id } }).rows;
   const products = useRows("products").rows; const suppliers = useRows("suppliers").rows; const settings = useRows("app_settings").rows;
   const batchRows = useRows("batch_items").rows; const batchStock = useRows("v_batch_item_stock").rows;
   if (!p) return loading ? <Loading /> : <NotFound what={`PO ${po}`} back={{ to: "/purchasing", label: "All purchase orders" }} />;
@@ -78,14 +80,17 @@ export function PurchaseOrderDocument() {
 
       <section className="mt-4 flex justify-end">
         <dl className="grid w-72 grid-cols-[1fr_auto] gap-x-6 gap-y-1">
-          <dt className="font-semibold text-gray-900">Total {cur}</dt><dd className="text-right text-base font-semibold tabular-nums text-gray-900">{money(p.expected_amount, cur)}</dd>
+          {p.vat_applies && <><dt className="text-gray-500">Subtotal</dt><dd className="text-right tabular-nums">{money(p.expected_amount, cur)}</dd>
+            {vatSplit(shown.filter(l => l.unit_cost != null), rawLines, products, "purchase_value").map(t => <div key={t.rate} className="contents"><dt className="text-gray-500">VAT {pct(t.rate, 0)} over {money(t.base, cur)}</dt><dd className="text-right tabular-nums">{money(t.vat, cur)}</dd></div>)}
+            <div className="col-span-2 my-1 border-t border-gray-300" /></>}
+          <dt className="font-semibold text-gray-900">Total {cur}{p.vat_applies ? " incl. VAT" : ""}</dt><dd className="text-right text-base font-semibold tabular-nums text-gray-900">{money(Number(p.expected_amount) + (p.vat_applies ? vatSplit(shown.filter(l => l.unit_cost != null), rawLines, products, "purchase_value").reduce((x, t) => x + t.vat, 0) : 0), cur)}</dd>
         </dl>
       </section>
 
       <section className="mt-8 border-t border-gray-200 pt-6">
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Payment</div>
         {Number(p.deposit_pct) > 0 && <div>{Number(p.deposit_pct) >= 1 ? "Payment" : `Deposit ${pct(p.deposit_pct, 0)}`}: <b className="tabular-nums">{money(p.deposit_due, cur)}</b>{p.deposit_due_date ? `, due ${date(p.deposit_due_date)}` : ""}</div>}
-        {Number(p.deposit_pct) <= 0 && <div>Payment: <b className="tabular-nums">{money(p.expected_amount, cur)}</b>{p.balance_due_date ? `, due ${date(p.balance_due_date)}` : ""}</div>}
+        {Number(p.deposit_pct) <= 0 && <div>Payment: <b className="tabular-nums">{money(Number(p.expected_amount) + (p.vat_applies ? vatSplit(shown.filter(l => l.unit_cost != null), rawLines, products, "purchase_value").reduce((x, t) => x + t.vat, 0) : 0), cur)}</b>{p.balance_due_date ? `, due ${date(p.balance_due_date)}` : ""}</div>}
         {Number(p.deposit_pct) > 0 && Number(p.deposit_pct) < 1 && <div>Balance {pct(1 - Number(p.deposit_pct), 0)}{p.balance_due_date ? `, due ${date(p.balance_due_date)}` : ""}</div>}
         <div className="mt-1 text-gray-500">Please state PO {p.po_number} on your proforma invoice, invoice and shipping documents.</div>
         {p.notes && <div className="mt-3 whitespace-pre-line">{p.notes}</div>}

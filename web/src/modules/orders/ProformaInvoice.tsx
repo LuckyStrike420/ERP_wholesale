@@ -4,6 +4,7 @@
  * (choose "Save as PDF"); only the document is printed, not the app around it.
  * Company details come from Admin → Settings (company_*); nothing is invented when they are empty.
  */
+import { vatSplit } from "@/app/vat";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRows } from "@/app/store";
@@ -25,6 +26,7 @@ function SalesDocument({ kind }: { kind: "pi" | "invoice" }) {
   const id = o?.id ?? null;
   const lines = useRows(id && "v_order_lines", { eq: { sales_order_id: id }, order: [["line_no", "asc"]] });
   const products = useRows("products").rows; const customers = useRows("customers").rows;
+  const rawLines = useRows(id && "sales_order_lines", { eq: { sales_order_id: id } }).rows;
   const settings = useRows("app_settings").rows; const adjustments = useRows(id && "order_adjustments", { eq: { sales_order_id: id } }).rows;
   const links = useRows(id && "shipment_orders", { eq: { sales_order_id: id } }).rows; const ships = useRows("v_shipments").rows;
   if (!o) return loading ? <Loading /> : <NotFound what={`Order ${ref}`} back={{ to: "/orders", label: "All orders" }} />;
@@ -100,9 +102,10 @@ function SalesDocument({ kind }: { kind: "pi" | "invoice" }) {
       <section className="mt-4 flex justify-end">
         <dl className="grid w-72 grid-cols-[1fr_auto] gap-x-6 gap-y-1">
           <dt className="text-gray-500">Subtotal</dt><dd className="text-right tabular-nums">{money(o.order_value, cur)}</dd>
+          {o.vat_applies && vatSplit(shownLines, rawLines, products).map(t => <div key={t.rate} className="contents"><dt className="text-gray-500">VAT {pct(t.rate, 0)} over {money(t.base, cur)}</dt><dd className="text-right tabular-nums">{money(t.vat, cur)}</dd></div>)}
           {adjustments.map(a => <div key={a.id} className="contents"><dt className="text-gray-500">{a.reason}</dt><dd className="text-right tabular-nums">{money(a.amount, cur)}</dd></div>)}
           <div className="col-span-2 my-1 border-t border-gray-300" />
-          <dt className="font-semibold text-gray-900">Total {cur}</dt><dd className="text-right text-base font-semibold tabular-nums text-gray-900">{money(o.total_receivable, cur)}</dd>
+          <dt className="font-semibold text-gray-900">Total {cur}{o.vat_applies ? " incl. VAT" : ""}</dt><dd className="text-right text-base font-semibold tabular-nums text-gray-900">{money(o.total_receivable, cur)}</dd>
           {inv && Number(o.paid) > 0 && <><dt className="text-gray-500">Received</dt><dd className="text-right tabular-nums">−{money(o.paid, cur)}</dd></>}
           {inv && Number(o.written_off) !== 0 && <><dt className="text-gray-500">Settled</dt><dd className="text-right tabular-nums">−{money(o.written_off, cur)}</dd></>}
           {inv && <><div className="col-span-2 my-1 border-t border-gray-300" /><dt className="font-semibold text-gray-900">Balance due</dt><dd className="text-right text-base font-semibold tabular-nums text-gray-900">{money(Math.max(Number(o.outstanding), 0), cur)}</dd></>}

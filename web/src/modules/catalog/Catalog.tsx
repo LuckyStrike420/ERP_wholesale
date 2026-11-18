@@ -1,6 +1,7 @@
 /**
  * Products and price agreements: /products, /products/new, /products/clever-cane, /prices, /prices/new, /prices/1a2b3c4d
  */
+import { VAT_OPTIONS } from "@/app/vat";
 import { Plus } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
 import { useParams } from "@/app/router";
@@ -58,6 +59,7 @@ export function ProductForm() {
       { name: `${k}_basis`, label: `${t} cost basis (${c})`, type: "number", span: 1, section: "Cost rules" }, { name: `${k}_share`, label: `${t} share above basis %`, type: "percent", span: 1, section: "Cost rules" },
       { name: `${k}_royalty`, label: `${t} royalty per piece (${c})`, type: "number", span: 1, section: "Cost rules" }] as Field[]; }),
     ...(row ? [{ name: "cost_valid_from", label: "A changed cost rule is valid from", type: "date", span: 1, section: "Cost rules", hint: "Earlier orders keep the old rule. Choose an earlier date only to correct the past: you see the effect first." } as Field] : []),
+    { name: "vat_rate", label: "VAT rate", type: "select", span: 1, section: "Standard sale price", options: VAT_OPTIONS, hint: "Only charged on EXW sales and purchases with a Dutch company" },
     { name: "units_per_carton", label: "Pieces per carton", type: "number", span: 1, section: "Packing", hint: "Used on packing lists: cartons, weights and CBM are worked out from these" },
     { name: "carton_net_kg", label: "Net weight per carton (kg)", type: "number", span: 1, section: "Packing" }, { name: "carton_weight_kg", label: "Gross weight per carton (kg)", type: "number", span: 1, section: "Packing" },
     { name: "carton_length_cm", label: "Carton length (cm)", type: "number", span: 1, section: "Packing" }, { name: "carton_width_cm", label: "Carton width (cm)", type: "number", span: 1, section: "Packing" },
