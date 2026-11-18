@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { AdminHead } from "@/modules/admin/Admin";
 
 const ROLE = { admin: "an admin", finance: "an admin or finance" } as Record<string, string>;
-const who = (id: string | null | undefined, name: string | null | undefined, me?: string) => id && id === me ? "you" : name ?? "a colleague";
+const who = (id: string | null | undefined, name: string | null | undefined, me?: string | null) => id && id === me ? "you" : name ?? "a colleague";
 const canDecide = (role: string | null | undefined, approver: string | null | undefined) => role === "admin" || (!!role && role === (approver ?? "admin"));
 export const policyText = (p: any) => `Margin below ${pct(p.margin_below, 1)}${p.order_type ? ` on ${p.order_type} orders` : ""}: approval by ${ROLE[p.approver_role] ?? "an admin"}`;
 
