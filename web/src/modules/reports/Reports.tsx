@@ -1,5 +1,6 @@
 /**
- * Reports: /reports (by customer), /reports/suppliers, /reports/monthly, /reports/products, /reports/cash-flow, /reports/custom (your own).
+ * Reports: /reports (by customer), /reports/suppliers, /reports/monthly, /reports/products, /reports/forecast (revenue per month),
+ * /reports/cash-flow (cash per week and every open amount), /reports/custom (your own).
  * What is open and late lives under Payments.
  */
 import { useNav, useQuery, usePath } from "@/app/router";
@@ -8,10 +9,11 @@ import { orderPath, poPath } from "@/app/paths";
 import { DataTable, PageHeader, Section, TabLinks, selectClass, type Col } from "@/app/ui";
 import { date, money, marginPct, monthName, qty } from "@/app/format";
 import { CustomReports } from "./Custom";
+import { CashWeekly, RevenueForecast } from "./Forecast";
 
 const m = (key: string, header: string): Col => ({ key, header, align: "right", render: r => money(r[key], r.currency) });
 
-export default function Reports({ tab }: { tab: "customers" | "suppliers" | "monthly" | "products" | "cash-flow" | "custom" }) {
+export default function Reports({ tab }: { tab: "customers" | "suppliers" | "monthly" | "products" | "cash-flow" | "forecast" | "custom" }) {
   const nav = useNav(); const q = useQuery(); const path = usePath();
   const cur = q.get("currency") ?? ""; const yearQ = q.get("year");
   const set = (k: string, v: string) => { const n = new URLSearchParams(q); if (v) n.set(k, v); else n.delete(k); nav(`${path}${n.toString() ? "?" + n : ""}`, { replace: true }); };
@@ -24,7 +26,7 @@ export default function Reports({ tab }: { tab: "customers" | "suppliers" | "mon
   const head = <>
     <PageHeader title="Reports" sub="Every table can be searched, sorted and exported. EUR and USD are never added together." />
     <TabLinks tabs={[{ to: "/reports", label: "By customer" }, { to: "/reports/suppliers", label: "By supplier" }, { to: "/reports/monthly", label: "Monthly" },
-      { to: "/reports/products", label: "Products" }, { to: "/reports/cash-flow", label: "Cash-flow forecast" }, { to: "/reports/custom", label: "Your reports" }]} /></>;
+      { to: "/reports/products", label: "Products" }, { to: "/reports/forecast", label: "Revenue forecast" }, { to: "/reports/cash-flow", label: "Cash per week" }, { to: "/reports/custom", label: "Your reports" }]} /></>;
   if (tab === "custom") return <CustomReports head={head} />;
   return <>{head}
     {tab === "customers" && <ByCustomer pick={pick} curSel={curSel} />}
@@ -37,7 +39,8 @@ export default function Reports({ tab }: { tab: "customers" | "suppliers" | "mon
       <p className="border-t border-gray-100 px-5 py-2.5 text-xs text-gray-500">"Revenue in EUR" uses the exchange rate on the PO date. Rates are entered under Admin → Exchange rates.</p>
     </Section>}
     {tab === "products" && <Products pick={pick} y={y} toolbar={<>{yearSel}{curSel}</>} />}
-    {tab === "cash-flow" && <CashFlow pick={pick} curSel={curSel} />}
+    {tab === "forecast" && <RevenueForecast />}
+    {tab === "cash-flow" && <><CashWeekly pick={pick} /><CashFlow pick={pick} curSel={curSel} /></>}
   </>;
 }
 
@@ -66,7 +69,7 @@ function Products({ pick, y, toolbar }: any) {
 }
 function CashFlow({ pick, curSel }: any) {
   const cash = useRows("v_cash_flow", { order: [["due_date", "asc"]] }).rows;
-  return <Section title="Expected money in and out, by due date">
+  return <Section title="Every open amount, by due date">
     <DataTable rows={pick(cash).map((r: any, i: number) => ({ ...r, id: i }))} search exportName="cash-flow-forecast" toolbar={curSel}
       rowTo={r => r.direction === "in" ? orderPath({ pi_number: r.reference, id: r.order_id }) : poPath({ po_number: r.reference })}
       cols={[{ key: "due_date", header: "Due", render: r => (r.due_date ? date(r.due_date) : <span className="text-amber-600">no due date</span>) }, { key: "direction", header: "Direction", render: r => (r.direction === "in" ? "In" : "Out") },

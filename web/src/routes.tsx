@@ -60,7 +60,7 @@ export const ROUTES: Route[] = [
   r("/stock/items/new", "stock", BatchItemForm), r("/stock/items/:id", "stock", BatchItemForm), r("/stock/corrections/new", "stock", StockCorrection),
   r("/reports", "reports", () => <Reports tab="customers" />), r("/reports/suppliers", "reports", () => <Reports tab="suppliers" />),
   r("/reports/monthly", "reports", () => <Reports tab="monthly" />), r("/reports/products", "reports", () => <Reports tab="products" />),
-  r("/reports/cash-flow", "reports", () => <Reports tab="cash-flow" />), r("/reports/custom", "reports", () => <Reports tab="custom" />),
+  r("/reports/cash-flow", "reports", () => <Reports tab="cash-flow" />), r("/reports/custom", "reports", () => <Reports tab="custom" />), r("/reports/forecast", "reports", () => <Reports tab="forecast" />),
   r("/reports/custom/new", "reports", ReportBuilder), r("/reports/custom/:id", "reports", ReportBuilder),
   r("/admin", "admin", Settings), r("/admin/settings/:key", "admin", SettingForm),
   r("/admin/automations", "admin", Automations), r("/admin/automations/new", "admin", AutomationForm), r("/admin/automations/:id", "admin", AutomationForm),
