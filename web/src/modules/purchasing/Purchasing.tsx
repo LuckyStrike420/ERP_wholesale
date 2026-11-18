@@ -65,6 +65,7 @@ export function PurchaseOrderDetail() {
   const id = p?.id ?? null;
   const inv = useRows(id && "supplier_invoices", { eq: { purchase_order_id: id } }).rows[0];
   const lines = useRows(id && "v_order_lines", { eq: { purchase_order_id: id }, order: [["pi_number", "asc"]] }).rows;
+  const batchRows = useRows("batch_items").rows; const batchStock = useRows("v_batch_item_stock").rows;
   const allocs = useRows(id && "v_allocations", { eq: { purchase_order_id: id }, order: [["payment_date", "asc"]] }).rows;
   const writeOffs = useRows(id && "write_offs", { eq: { purchase_order_id: id } }).rows;
   const products = useRows("products").rows; const suppliers = useRows("suppliers").rows;
@@ -99,7 +100,7 @@ export function PurchaseOrderDetail() {
     </div>
     <Section title="Order lines on this PO" className="mb-6">
       <DataTable rows={lines} empty="No order lines linked yet. Link a line by choosing this PO on the order." rowTo={l => orderPath({ pi_number: l.pi_number, id: l.sales_order_id })} cols={[
-        { key: "pi_number", header: "PI#", render: l => <span className="font-semibold text-gray-900">{l.pi_number ?? "draft"}</span> }, { key: "product", header: "Product", value: l => pName[l.product_id], render: l => pName[l.product_id] },
+        { key: "pi_number", header: "PI#", render: l => <span className="font-semibold text-gray-900">{l.pi_number ?? "draft"}</span> }, { key: "product", header: "Product", value: l => pName[l.product_id], render: l => <div>{pName[l.product_id]}<BatchPriceNote l={l} items={batchRows} stock={batchStock} /></div> },
         { key: "qty", header: "Qty", align: "right", render: l => qty(l.qty) }, { key: "unit_cost", header: "Cost per piece", align: "right", render: l => money(l.unit_cost, cur, 3) },
         { key: "purchase_value", header: "Purchase value", align: "right", render: l => money(l.purchase_value, cur) },
         { key: "invoice_variance", header: "Invoice difference", align: "right", render: l => Number(l.invoice_variance) ? money(l.invoice_variance, cur) : "–" }]} />
@@ -117,6 +118,15 @@ export function PurchaseOrderDetail() {
       <DocumentsSection entity="purchase_orders" id={p.id} />
     </div>
   </>;
+}
+
+/** for a line sold from NL stock: how its purchase price is built up ("batch 1257: €9.94 + 50% of the margin, sold at €17.25") */
+export function BatchPriceNote({ l, items, stock, className }: { l: any; items: any[]; stock: any[]; className?: string }) {
+  if (!l.batch_item_id || l.cost_source !== "batch") return null;
+  const bi = items.find(x => x.id === l.batch_item_id); const st = stock.find(x => x.batch_item_id === l.batch_item_id);
+  if (!bi) return null;
+  const shared = Number(bi.share_above_basis) > 0;
+  return <div className={className ?? "text-xs text-gray-500"}>Batch {st?.batch_number}: {money(bi.cost_basis ?? 0, l.currency, 2)}{shared ? ` + ${pct(bi.share_above_basis, 0)} of the margin above it (sold at ${money(l.unit_price, l.currency, 2)})` : " per piece"}</div>;
 }
 
 export function PurchaseOrderEdit() {

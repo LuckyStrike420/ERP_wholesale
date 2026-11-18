@@ -3,10 +3,11 @@
  */
 import { Plus } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
-import { Link, useParams } from "@/app/router";
+import { Link, useParams, useQuery } from "@/app/router";
 import { orderPath, shipmentPath, shipmentRef } from "@/app/paths";
 import { DataTable, FormPage, LinkButton, Loading, NotFound, PageHeader, Pill, Section, type Field } from "@/app/ui";
-import { date, qty, SHIP_LABEL, today } from "@/app/format";
+import { date, money, pct, qty, SHIP_LABEL, today } from "@/app/format";
+import { batchPath } from "@/modules/stock/Batches";
 
 export function Shipping() {
   const ships = useRows("v_shipments").rows; const orders = useRows("v_orders").rows; const links = useRows("shipment_orders").rows;
@@ -54,18 +55,24 @@ export function ShipmentForm() {
 }
 
 export function Stock() {
-  const items = useRows("v_batch_item_stock", { order: [["batch_number", "desc"]] }).rows;
+  const { db } = useApp();
+  const stockRows = useRows("v_batch_item_stock", { order: [["batch_number", "desc"]] }).rows; const raw = useRows("batch_items").rows;
+  const items = stockRows.map(s => ({ ...s, cost_basis: raw.find(r => r.id === s.batch_item_id)?.cost_basis, share_above_basis: raw.find(r => r.id === s.batch_item_id)?.share_above_basis }));
   const perProduct = useRows("v_product_stock", { order: [["product_name", "asc"]] }).rows; const moves = useRows("v_stock_movements", { order: [["movement_date", "desc"]] }).rows;
   const itemLabel = Object.fromEntries(items.map(i => [i.batch_item_id, `${i.batch_number} · ${i.product_name}`]));
   const neg = (v: any) => <span className={Number(v) < 0 ? "font-semibold text-rose-600" : ""}>{qty(v)}</span>;
   return <>
-    <PageHeader title="NL stock" sub="Shipments the supplier places in our warehouse. Selling from a batch lowers its stock; the PO to the supplier follows after the sale.">
+    <PageHeader title="NL stock" sub="Shipments the supplier places in our warehouse. An EXW sale from a batch costs the purchase price, plus the supplier's share of the margin when that is shared. Click a batch to change it.">
       <LinkButton to="/stock/batches/new"><Plus />New batch</LinkButton>
-      <LinkButton variant="outline" to="/stock/items/new">Add product to batch</LinkButton><LinkButton variant="outline" to="/stock/corrections/new">Stock correction</LinkButton></PageHeader>
+      <LinkButton variant="outline" to="/stock/corrections/new">Stock correction</LinkButton></PageHeader>
     <div className="grid gap-6 xl:grid-cols-2">
       <Section title="Per batch and product" className="xl:col-span-2">
-        <DataTable rows={items} search exportName="stock-per-batch" empty="No stock batches yet" cols={[
+        <DataTable rows={items} search exportName="stock-per-batch" empty="No stock batches yet" rowTo={i => batchPath(i)} cols={[
           { key: "batch_number", header: "Batch#", render: i => <span className="font-semibold text-gray-900">{i.batch_number}</span> }, { key: "product_name", header: "Product" }, { key: "received_date", header: "Received on", render: i => date(i.received_date) },
+          { key: "cost_basis", header: "Purchase price", align: "right", render: i => i.cost_basis == null ? <Pill tone="amber">missing</Pill> : money(i.cost_basis, "EUR", 2),
+            edit: { kind: "number", save: (i, v) => db.update("batch_items", { id: i.batch_item_id }, { cost_basis: v }) } },
+          { key: "share_above_basis", header: "Margin to supplier", align: "right", render: i => Number(i.share_above_basis) > 0 ? pct(i.share_above_basis, 0) : <span className="text-gray-400">not shared</span>,
+            edit: { kind: "number", get: i => i.share_above_basis == null ? null : Number(i.share_above_basis) * 100, save: (i, v) => db.update("batch_items", { id: i.batch_item_id }, { share_above_basis: v == null || Number(v) === 0 ? null : Number(v) / 100 }) } },
           { key: "qty_received", header: "Quantity received", align: "right", render: i => qty(i.qty_received) }, { key: "adjustments", header: "Corrections", align: "right", render: i => qty(i.adjustments) },
           { key: "sold", header: "Sold", align: "right", render: i => qty(i.sold) }, { key: "stock", header: "In stock", align: "right", render: i => <b>{neg(i.stock)}</b> },
           { key: "sold_without_po", header: "Sold, no PO yet", align: "right", render: i => Number(i.sold_without_po) > 0 ? <span className="font-semibold text-amber-600">{qty(i.sold_without_po)}</span> : "–" }]} />
@@ -80,26 +87,13 @@ export function Stock() {
   </>;
 }
 
-const back = { to: "/stock", label: "NL stock" };
-export function BatchNew() {
-  const { db } = useApp(); const suppliers = useRows("suppliers").rows;
-  return <FormPage title="New batch" sub="One batch per shipment the supplier places with us. No PO needed yet." back={back} initial={{ received_date: today() }}
-    fields={[{ name: "batch_number", label: "Batch#", required: true, span: 1 }, { name: "received_date", label: "Received on", type: "date", span: 1 },
-      { name: "supplier_id", label: "Supplier", type: "select", options: suppliers.map(s => ({ value: s.id, label: s.name })) }, { name: "reference", label: "Container# / reference" }, { name: "notes", label: "Note", type: "textarea" }]}
-    onSubmit={async v => { await db.insert("batches", v); return "/stock/items/new"; }} />;
-}
-export function BatchItemNew() {
-  const { db } = useApp(); const batches = useRows("v_batch_stock", { order: [["batch_number", "desc"]] }).rows; const products = useRows("products", { order: [["name", "asc"]] }).rows;
-  return <FormPage title="Add product to batch" sub="Optional EXW cost rule for this batch: basis only = fixed cost, basis + share = profit share. Empty = price agreement or product rule." back={back}
-    fields={[{ name: "batch_id", label: "Batch", type: "select", required: true, span: 1, options: batches.map(b => ({ value: b.batch_id, label: b.batch_number })) },
-      { name: "product_id", label: "Product", type: "select", required: true, span: 1, options: products.map(p => ({ value: p.id, label: p.name })) },
-      { name: "qty_received", label: "Quantity received", type: "number", required: true }, { name: "cost_basis", label: "EXW cost basis (€)", type: "number", span: 1 }, { name: "share_above_basis", label: "Share above basis %", type: "percent", span: 1 },
-      { name: "notes", label: "Note", type: "textarea" }]} onSubmit={async v => { await db.insert("batch_items", v); }} />;
-}
 export function StockCorrection() {
-  const { db } = useApp(); const items = useRows("v_batch_item_stock", { order: [["batch_number", "desc"]] }).rows; const kinds = useRows("stock_adjustment_kinds").rows;
-  return <FormPage title="Stock correction" sub="Count, damage or return. Less stock is a negative number." back={back} initial={{ adjustment_date: today() }}
-    fields={[{ name: "batch_item_id", label: "Batch · product", type: "select", required: true, options: items.map(i => ({ value: i.batch_item_id, label: `${i.batch_number} · ${i.product_name} (${i.stock} in stock)` })) },
+  const { db } = useApp(); const q = useQuery(); const items = useRows("v_batch_item_stock", { order: [["batch_number", "desc"]] }); const kinds = useRows("stock_adjustment_kinds").rows;
+  if (items.loading && !items.rows.length) return <Loading />;
+  const inBatch = items.rows.filter(i => i.batch_number === q.get("batch"));
+  const back = inBatch.length ? { to: batchPath(inBatch[0]), label: `Batch ${inBatch[0].batch_number}` } : { to: "/stock", label: "NL stock" };
+  return <FormPage title="Stock correction" sub="Count, damage or return. Less stock is a negative number." back={back} done={back.to} initial={{ adjustment_date: today(), batch_item_id: inBatch.length === 1 ? inBatch[0].batch_item_id : undefined }}
+    fields={[{ name: "batch_item_id", label: "Batch · product", type: "select", required: true, options: items.rows.map(i => ({ value: i.batch_item_id, label: `${i.batch_number} · ${i.product_name} (${i.stock} in stock)` })) },
       { name: "adjustment_date", label: "Date", type: "date", span: 1 }, { name: "kind", label: "Kind", type: "select", span: 1, options: kinds.map(k => ({ value: k.code, label: k.code })) },
       { name: "quantity", label: "Quantity (+/-)", type: "number", required: true, span: 1 }, { name: "reference", label: "Reference", span: 1 }, { name: "notes", label: "Note", type: "textarea" }]}
     onSubmit={async v => { await db.insert("stock_adjustments", v); }} />;

@@ -78,7 +78,8 @@ function LineForm({ o, lineNo }: { o: any; lineNo: number | null }) {
     { name: "quantity", label: "Quantity", type: "number", required: true, span: 1 },
     { name: "unit_price", label: `Sale price per piece (${cur})`, type: "number", required: true, span: 1 },
     { name: "purchase_order_id", label: "Our PO to the supplier", type: "select", span: 1, section: "Purchasing", options: pos.filter(p => p.order_type === o.order_type).map(p => ({ value: p.id, label: `${p.po_number} · ${p.supplier_name}` })) },
-    { name: "batch_item_id", label: "From NL stock (batch)", type: "select", span: 1, section: "Purchasing", options: stock.map(s => ({ value: s.batch_item_id, label: `${s.batch_number} · ${s.product_name} (${s.stock} in stock)` })) },
+    { name: "batch_item_id", label: "From NL stock (batch)", type: "select", span: 1, section: "Purchasing", options: stock.map(s => ({ value: s.batch_item_id, label: `${s.batch_number} · ${s.product_name} (${s.stock} in stock)` })),
+      hint: o.order_type === "EXW" && !row ? "Empty = the oldest batch of this product that still has stock" : undefined },
     { name: "cost_override", label: `Purchase price override (${cur})`, type: "number", span: 1, section: "Purchasing", hint: "Only for a one-off exception" },
     { name: "line_date", label: "Line date", type: "date", span: 1, section: "Purchasing", hint: "Only if different from the PO date" },
     ...(row ? [{ name: "quantity_cancelled", label: "Quantity cancelled", type: "number", span: 1, section: "Purchasing" } as Field] : []),
@@ -86,6 +87,10 @@ function LineForm({ o, lineNo }: { o: any; lineNo: number | null }) {
   ];
   const save = async (v: any) => {
     const body = { ...v, quantity_cancelled: v.quantity_cancelled ?? 0 };
+    // a new EXW line sells from NL stock when there is any: the oldest batch first
+    if (!row && o.order_type === "EXW" && !body.batch_item_id && body.cost_override == null)
+      body.batch_item_id = stock.filter(s => s.product_id === body.product_id && Number(s.stock) > 0)
+        .sort((a, b) => String(a.received_date ?? "").localeCompare(String(b.received_date ?? "")))[0]?.batch_item_id ?? null;
     if (row) await db.update("sales_order_lines", { id: row.id }, body);
     else await db.insert("sales_order_lines", { ...body, sales_order_id: o.id, line_no: Math.max(0, ...lines.rows.map(l => l.line_no)) + 1 });
   };
@@ -172,16 +177,18 @@ function OrderPOForm({ o }: { o: any }) {
   const { db } = useApp();
   const lines = useRows("v_order_lines", { eq: { sales_order_id: o.id }, order: [["line_no", "asc"]] });
   const productsQ = useRows("products"); const suppliersQ = useRows("suppliers", { order: [["name", "asc"]] });
-  const termsQ = useRows("supplier_terms"); const posQ = useRows("purchase_orders");
+  const termsQ = useRows("supplier_terms"); const posQ = useRows("purchase_orders"); const stockQ = useRows("v_batch_item_stock");
   // the form starts with suggestions, so it waits until everything it suggests from is loaded
-  if ([lines, productsQ, suppliersQ, termsQ, posQ].some(q => q.loading)) return <Loading />;
+  if ([lines, productsQ, suppliersQ, termsQ, posQ, stockQ].some(q => q.loading)) return <Loading />;
+  const batchSup = Object.fromEntries(stockQ.rows.map(s => [s.batch_item_id, s.supplier_id]));
   const products = productsQ.rows, suppliers = suppliersQ.rows, terms = termsQ.rows, pos = posQ.rows;
   const open = lines.rows.filter(l => !l.purchase_order_id && Number(l.qty) > 0);
   if (!open.length) return <NotFound what="An order line without a PO" back={backTo(o)} />;
   const prod = Object.fromEntries(products.map(p => [p.id, p]));
   // suggestions only: the supplier of most products on these lines, and the next free numeric PO#
   const counts: Record<string, number> = {};
-  for (const l of open) { const s = prod[l.product_id]?.default_supplier_id; if (s) counts[s] = (counts[s] ?? 0) + 1; }
+  // a line sold from NL stock is owed to the supplier of its batch; otherwise the product's usual supplier
+  for (const l of open) { const s = (l.batch_item_id && batchSup[l.batch_item_id]) || prod[l.product_id]?.default_supplier_id; if (s) counts[s] = (counts[s] ?? 0) + (l.batch_item_id ? 10 : 1); }
   const supplier = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
   const nums = pos.map(p => Number(p.po_number)).filter(n => Number.isInteger(n));
   const next = nums.length ? String(Math.max(...nums) + 1) : "";

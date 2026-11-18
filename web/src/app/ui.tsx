@@ -286,7 +286,7 @@ export function FormPage({ title, sub, back, fields, initial, submitLabel = "Sav
                           <option value="">–</option>{f.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>;
                       })()
                       : f.type === "textarea" ? <Textarea id={f.name} rows={3} value={v[f.name]} onChange={e => set(f.name, e.target.value)} className="border-gray-300" />
-                      : f.type === "checkbox" ? <label className="flex items-center gap-2 text-sm text-gray-800"><input type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-indigo-600" checked={!!v[f.name]} onChange={e => set(f.name, e.target.checked)} />{f.label}</label>
+                      : f.type === "checkbox" ? <label className="flex items-center gap-2 text-sm text-gray-800"><input id={f.name} type="checkbox" className="h-4 w-4 rounded border-gray-300 accent-indigo-600" checked={!!v[f.name]} onChange={e => set(f.name, e.target.checked)} />{f.label}</label>
                       : <Input id={f.name} type={f.type === "date" ? "date" : "text"} inputMode={f.type === "number" || f.type === "percent" ? "decimal" : undefined}
                           placeholder={f.placeholder} value={v[f.name]} onChange={e => set(f.name, e.target.value)} className="h-9 border-gray-300" />}
                     {f.hint && <p className="mt-1.5 text-xs text-gray-500">{f.hint}</p>}

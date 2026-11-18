@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { Combobox } from "@/app/Combobox";
 import { quickCreate } from "@/app/quickCreate";
 
-type Line = { key: number; product_id: string; quantity: string; unit_price: string; batch_item_id: string;
+type Line = { key: number; product_id: string; quantity: string; unit_price: string; batch_item_id: string; batch_touched?: boolean;
   touched: boolean; source: string | null; suggestion: { price: number; source: string; moq: number | null } | null };
 const PRICE_SOURCE: Record<string, string> = { customer_agreement: "Customer agreement", standard_agreement: "Standard agreement", product_price: "Product price", copied: "From earlier order", manual: "Typed in" };
 let keySeq = 1;
@@ -65,6 +65,14 @@ export default function OrderComposer() {
   }, [orders.loading, products.loading, fromLines.loading, fromOrder, fromRef, nextPi, fromLines.rows]);
 
   const setLine = (key: number, patch: Partial<Line>) => setLines(ls => ls.map(l => (l.key === key ? { ...l, ...patch } : l)));
+  // EXW sells from NL stock: each line takes the oldest batch that still has stock, unless you chose otherwise
+  const fifo = (pid: string) => stock.filter(s => s.product_id === pid && Number(s.stock) > 0)
+    .sort((a, b) => String(a.received_date ?? "").localeCompare(String(b.received_date ?? "")) || String(a.batch_number).localeCompare(String(b.batch_number)))[0]?.batch_item_id ?? "";
+  const productKey = lines.map(l => `${l.key}:${l.product_id}`).join(",");
+  useEffect(() => {
+    setLines(ls => ls.map(l => l.batch_touched || !l.product_id ? l
+      : h.order_type === "EXW" ? (l.batch_item_id ? l : { ...l, batch_item_id: fifo(l.product_id) }) : (l.batch_item_id ? { ...l, batch_item_id: "" } : l)));
+  }, [h.order_type, productKey, stock.length]);   // eslint-disable-line react-hooks/exhaustive-deps
   const pickCustomer = (id: string) => {
     const last = orders.rows.find(o => o.customer_id === id && o.status !== "cancelled");
     setH(x => ({ ...x, customer_id: id, order_type: last?.order_type ?? x.order_type, payment_term_id: "" }));
@@ -180,7 +188,7 @@ export default function OrderComposer() {
                 return <tr key={l.key} className="border-b border-gray-100 align-top last:border-0">
                   <td className="px-4 py-2.5">
                     <Combobox label="Product" className="min-w-48" value={l.product_id || null} placeholder="Type a product…"
-                      onChange={v => setLine(l.key, { product_id: v ?? "", touched: false, source: null, unit_price: "", suggestion: null, batch_item_id: "" })}
+                      onChange={v => setLine(l.key, { product_id: v ?? "", touched: false, source: null, unit_price: "", suggestion: null, batch_item_id: "", batch_touched: false })}
                       options={products.rows.map(x => ({ value: x.id, label: x.name, hint: x.sku ?? undefined, keywords: x.sku ?? "" }))}
                       create={async t => { const id = await quickCreate(db, "product", t); refresh(); return id; }} createNoun="product" />
                     {l.product_id && prod[l.product_id]?.sku && <div className="mt-1 text-xs text-gray-400">SKU {prod[l.product_id].sku}</div>}
@@ -192,7 +200,7 @@ export default function OrderComposer() {
                       {differs && <button type="button" className="ml-1 font-medium text-indigo-600 hover:underline" onClick={() => setLine(l.key, { unit_price: String(l.suggestion!.price), source: l.suggestion!.source, touched: false })}>
                         use {money(l.suggestion!.price, cur, 2)}</button>}
                       {l.product_id && !l.suggestion && !l.unit_price && <span className="text-gray-400">no agreed price</span>}</div></td>
-                  <td className="px-2 py-2.5">{st.length ? <select aria-label="Batch" className={selectClass + " w-full min-w-40"} value={l.batch_item_id} onChange={e => setLine(l.key, { batch_item_id: e.target.value })}>
+                  <td className="px-2 py-2.5">{st.length ? <select aria-label="Batch" className={selectClass + " w-full min-w-40"} value={l.batch_item_id} onChange={e => setLine(l.key, { batch_item_id: e.target.value, batch_touched: true })}>
                       <option value="">Not from stock</option>{st.map(s => <option key={s.batch_item_id} value={s.batch_item_id}>{s.batch_number} · {qty(s.stock)} free</option>)}</select>
                     : <span className="whitespace-nowrap text-xs text-gray-400">{l.product_id ? "none" : ""}</span>}</td>
                   <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">{!p ? <span className="text-gray-300">–</span> : p.unit_cost == null ? <Pill tone="red">missing</Pill>

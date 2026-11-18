@@ -10,6 +10,7 @@ import { Link, useParams } from "@/app/router";
 import { poPath, supplierPath } from "@/app/paths";
 import { Loading, NotFound, Notice } from "@/app/ui";
 import { date, money, pct, qty } from "@/app/format";
+import { BatchPriceNote } from "./Purchasing";
 
 const unitPrice = (v: any, cur: string) => `${cur === "USD" ? "$" : cur === "EUR" ? "€" : cur + " "}${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
@@ -18,6 +19,7 @@ export function PurchaseOrderDocument() {
   const { rows, loading } = useRows("v_purchase_orders", { eq: { po_number: po } }); const p = rows[0];
   const lines = useRows(p ? "v_order_lines" : null, { eq: { purchase_order_id: p?.id }, order: [["pi_number", "asc"], ["line_no", "asc"]] });
   const products = useRows("products").rows; const suppliers = useRows("suppliers").rows; const settings = useRows("app_settings").rows;
+  const batchRows = useRows("batch_items").rows; const batchStock = useRows("v_batch_item_stock").rows;
   if (!p) return loading ? <Loading /> : <NotFound what={`PO ${po}`} back={{ to: "/purchasing", label: "All purchase orders" }} />;
   if (lines.loading) return <Loading />;
   const set = (k: string) => (settings.find(s => s.key === k)?.value ?? "").trim();
@@ -67,7 +69,7 @@ export function PurchaseOrderDocument() {
           <th className="py-2 pr-2 text-right font-semibold">Qty</th><th className="py-2 pr-2 text-right font-semibold">Unit price</th><th className="py-2 text-right font-semibold">Amount</th></tr></thead>
         <tbody>{shown.map((l, i) => <tr key={l.id} className="border-b border-gray-100">
           <td className="py-2 pr-2 align-top text-gray-400">{i + 1}</td>
-          <td className="py-2 pr-2 align-top text-gray-900">{prod[l.product_id]?.name}</td>
+          <td className="py-2 pr-2 align-top text-gray-900">{prod[l.product_id]?.name}<BatchPriceNote l={l} items={batchRows} stock={batchStock} className="text-[11px] text-gray-500" /></td>
           <td className="py-2 pr-2 align-top text-gray-500">{prod[l.product_id]?.sku ?? ""}</td>
           <td className="py-2 pr-2 text-right align-top tabular-nums">{qty(l.qty)}</td>
           <td className="py-2 pr-2 text-right align-top tabular-nums">{l.unit_cost == null ? <span className="text-gray-400">to be confirmed</span> : unitPrice(l.unit_cost, cur)}</td>

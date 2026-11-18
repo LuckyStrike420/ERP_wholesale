@@ -11,12 +11,13 @@ import ProformaInvoice, { CommercialInvoice } from "@/modules/orders/ProformaInv
 import { ShippingDocumentEdit, ShippingDocumentNew } from "@/modules/documents/ShippingDocument";
 import { PurchaseOrderDocument } from "@/modules/purchasing/PurchaseOrderDocument";
 import { CustomerContactForm, SupplierContactForm } from "@/modules/parties/Contacts";
+import { BatchDetail, BatchForm, BatchItemForm } from "@/modules/stock/Batches";
 import { LineCost, OrderPurchaseOrder, OrderCorrection, OrderEdit, OrderInvoice, OrderLine, OrderPayment, OrderWriteOff } from "@/modules/orders/OrderForms";
 import { Ledger, ToPay, ToReceive, VoidPayment } from "@/modules/payments/Payments";
 import { PurchaseOrderDetail, PurchaseOrderEdit, PurchaseOrderInvoice, PurchaseOrderNew, PurchaseOrderPayment, PurchaseOrderWriteOff, PurchaseOrders } from "@/modules/purchasing/Purchasing";
 import { CustomerDetail, CustomerForm, Customers, SupplierDetail, SupplierForm, Suppliers } from "@/modules/parties/Parties";
 import { PriceForm, Prices, ProductForm, Products } from "@/modules/catalog/Catalog";
-import { BatchItemNew, BatchNew, ShipmentForm, Shipping, Stock, StockCorrection } from "@/modules/logistics/Logistics";
+import { ShipmentForm, Shipping, Stock, StockCorrection } from "@/modules/logistics/Logistics";
 import Reports from "@/modules/reports/Reports";
 import { Audit, Import, RateNew, Rates, SettingForm, Settings, UserForm, Users } from "@/modules/admin/Admin";
 import { PaymentTermForm, PaymentTerms } from "@/modules/admin/PaymentTerms";
@@ -49,7 +50,8 @@ export const ROUTES: Route[] = [
   r("/products", "products", Products), r("/products/new", "products", ProductForm), r("/products/:slug", "products", ProductForm),
   r("/prices", "prices", Prices), r("/prices/new", "prices", PriceForm), r("/prices/:id", "prices", PriceForm),
   r("/shipping", "shipping", Shipping), r("/shipping/new", "shipping", ShipmentForm), r("/shipping/:ref/edit", "shipping", ShipmentForm),
-  r("/stock", "stock", Stock), r("/stock/batches/new", "stock", BatchNew), r("/stock/items/new", "stock", BatchItemNew), r("/stock/corrections/new", "stock", StockCorrection),
+  r("/stock", "stock", Stock), r("/stock/batches/new", "stock", BatchForm), r("/stock/batches/:batch", "stock", BatchDetail), r("/stock/batches/:batch/edit", "stock", BatchForm),
+  r("/stock/items/new", "stock", BatchItemForm), r("/stock/items/:id", "stock", BatchItemForm), r("/stock/corrections/new", "stock", StockCorrection),
   r("/reports", "reports", () => <Reports tab="customers" />), r("/reports/suppliers", "reports", () => <Reports tab="suppliers" />),
   r("/reports/monthly", "reports", () => <Reports tab="monthly" />), r("/reports/products", "reports", () => <Reports tab="products" />),
   r("/reports/cash-flow", "reports", () => <Reports tab="cash-flow" />),
