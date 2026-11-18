@@ -1,4 +1,5 @@
 import { OrderApproval } from "@/modules/approvals/Approvals";
+import { OrderShipment, OrderSupplierPayments } from "./OrderSupply";
 import { useMemo, useState } from "react";
 import { AlertTriangle, Ban, Flag, ClipboardList, Copy, FileText, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -111,6 +112,8 @@ export default function OrderDetail() {
           ["Note", o.notes ?? "–"],
         ]} />
       </Section> },
+      { id: "shipment", title: "Shipment", size: "half", node: <OrderShipment o={o} shipment={shipment} lines={lines} locked={locked} /> },
+      { id: "supplier_payments", title: "To pay suppliers", size: "half", node: <OrderSupplierPayments o={o} lines={lines} locked={locked} /> },
       { id: "lines", title: "Order lines", node: <Section title="Order lines" action={!locked && <span className="flex gap-2">{poButton}<LinkButton size="sm" variant="outline" to={`${base}/lines/new`}><Plus />Add line</LinkButton></span>}>
       <DataTable rows={lines} empty="No lines yet. Add the first product." exportName={`order-${o.pi_number ?? "draft"}-lines`}
         rowTo={locked ? undefined : l => `${base}/lines/${l.line_no}`}

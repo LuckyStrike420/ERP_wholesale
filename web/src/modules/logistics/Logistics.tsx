@@ -34,16 +34,18 @@ const shipFields: Field[] = [
   { name: "docs_complete", label: "Documents complete (BL / CI / PL / COO)", type: "checkbox", section: "Planning" }, { name: "notes", label: "Note", type: "textarea", section: "Planning" }];
 
 export function ShipmentForm() {
-  const { ref } = useParams(); const { db } = useApp();
+  const { ref } = useParams(); const { db } = useApp(); const q = useQuery();
+  const forOrder = q.get("order"), forPo = q.get("po"), back = q.get("back");
   const ships = useRows("v_shipments"); const orders = useRows("v_orders", { order: [["pi_number", "desc"]] }).rows;
   const pos = useRows("v_purchase_orders", { order: [["po_number", "desc"]] }).rows; const links = useRows("shipment_orders").rows;
   const row = ref ? ships.rows.find(s => shipmentRef(s) === ref) : undefined;
   if (ref && !row) return ships.loading ? <Loading /> : <NotFound what="Shipment" back={{ to: "/shipping", label: "All shipments" }} />;
   const fields: Field[] = [
-    ...(row ? [] : [{ name: "sales_order_id", label: "PI", type: "select", span: 1, section: "For", options: orders.filter(o => o.pi_number && !links.some(l => l.sales_order_id === o.id)).map(o => ({ value: o.id, label: `${o.pi_number} · ${o.customer_name}` })) },
+    ...(row ? [] : [{ name: "sales_order_id", label: "PI", type: "select", span: 1, section: "For", options: orders.filter(o => (o.pi_number || o.id === forOrder) && !links.some(l => l.sales_order_id === o.id)).map(o => ({ value: o.id, label: `${o.pi_number ?? "Draft"} · ${o.customer_name}` })) },
       { name: "purchase_order_id", label: "Our PO", type: "select", span: 1, section: "For", options: pos.map(p => ({ value: p.id, label: `${p.po_number} · ${p.supplier_name}` })) }] as Field[]),
     ...shipFields.map(f => ({ ...f, section: f.section ?? "Shipment" }))];
-  return <FormPage title={row ? `Shipment ${row.container_number ?? row.pi_numbers ?? ""}` : "New shipment"} back={{ to: "/shipping", label: "Shipping" }} fields={fields} initial={row ?? {}}
+  return <FormPage title={row ? `Shipment ${row.container_number ?? row.pi_numbers ?? ""}` : "New shipment"} back={back ? { to: back, label: "Back to the order" } : { to: "/shipping", label: "Shipping" }} fields={fields}
+    initial={row ?? { sales_order_id: forOrder ?? "", purchase_order_id: forPo ?? "" }}
     sub={row ? `For PI ${row.pi_numbers ?? "–"} · PO ${row.po_numbers ?? "–"}` : undefined}
     onSubmit={async v => {
       const { sales_order_id, purchase_order_id, ...ship } = v;

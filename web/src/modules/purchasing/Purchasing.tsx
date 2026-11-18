@@ -3,7 +3,7 @@
  */
 import { FileText, Pencil, Plus, Receipt } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
-import { Link, useParams } from "@/app/router";
+import { Link, useParams, useQuery } from "@/app/router";
 import { orderPath, poPath, supplierPath } from "@/app/paths";
 import { DataTable, FormPage, KV, LinkButton, Loading, NotFound, PageHeader, Pill, Section, Stat, type Field } from "@/app/ui";
 import { date, money, pct, qty, today } from "@/app/format";
@@ -145,8 +145,8 @@ function POEditForm({ p, db }: { p: any; db: any }) {
 }
 
 export function PurchaseOrderPayment() {
-  const { db } = useApp();
-  return <WithPO>{p => <FormPage title="Register payment to supplier" submitLabel="Register payment" back={backTo(p)} aside={<POAside p={p} />}
+  const { db } = useApp(); const back = useQuery().get("back");
+  return <WithPO>{p => <FormPage title="Register payment to supplier" submitLabel="Register payment" back={back ? { to: back, label: "Back to the order" } : backTo(p)} aside={<POAside p={p} />}
     sub={`Outstanding ${money(p.outstanding, p.currency)}${Number(p.deposit_outstanding) > 0.01 ? `, of which deposit ${money(p.deposit_outstanding, p.currency)}` : ""}.`}
     initial={{ p_date: today(), p_amount: Number(p.deposit_outstanding) > 0.01 ? p.deposit_outstanding : Math.max(Number(p.outstanding), 0) }}
     fields={[{ name: "p_date", label: "Date paid", type: "date", required: true, span: 1 }, { name: "p_amount", label: `Amount (${p.currency})`, type: "number", required: true, span: 1 },
