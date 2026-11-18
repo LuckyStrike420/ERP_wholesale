@@ -6,6 +6,7 @@ import { orderPath } from "@/app/paths";
 import { FormPage, KV, Loading, NotFound, PageHeader, Pill, Section, type Field } from "@/app/ui";
 import { date, money, SOURCE_LABEL, termText, today } from "@/app/format";
 import { useOrder } from "./data";
+import { INCOTERM_OPTIONS } from "./incoterms";
 
 const TYPE_OPTIONS = [{ value: "EXW", label: "EXW (euro)" }, { value: "FOB", label: "FOB (dollar)" }];
 export const orderFields = (customers: any[]): Field[] => [
@@ -51,9 +52,12 @@ function OrderEditForm({ o, customers, db }: { o: any; customers: any[]; db: any
       { name: "deposit_pct", label: "Deposit % (exception)", type: "percent", span: 1, section: "Payment terms", hint: "Leave as it is to follow the term" },
       { name: "deposit_due_date", label: "Deposit due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = from the payment term" },
       { name: "balance_due_date", label: "Balance due date", type: "date", span: 1, section: "Payment terms", hint: "Empty = from the payment term" },
+      { name: "incoterm", label: "Delivery terms", type: "select", span: 1, section: "Delivery", required: true, options: INCOTERM_OPTIONS,
+        hint: "DAP and DDP: we arrange and pay the transport; add its cost on the order page" },
+      { name: "delivery_place", label: "Delivery place", span: 1, section: "Delivery", hint: "Shown on the PI after the term, e.g. DDP Hamburg" },
       { name: "vat_applies", label: "Charge Dutch VAT on this order", type: "checkbox", section: "VAT", hint: "Set automatically for EXW with a customer in the Netherlands. The rate (21% or 9%) comes from each product." }] as Field[]),
     { name: "notes", label: "Note", type: "textarea", section: "Note" }];
-  return <FormPage title={`Edit ${o.pi_number ? `PI ${o.pi_number}` : "draft order"}`} back={backTo(o)} fields={fields} initial={raw} aside={<OrderAside o={o} />}
+  return <FormPage title={`Edit ${o.pi_number ? `PI ${o.pi_number}` : "draft order"}`} back={backTo(o)} fields={fields} initial={{ ...raw, incoterm: raw.incoterm ?? raw.order_type }} aside={<OrderAside o={o} />}
     onSubmit={async v => { const patch = { ...v }; if (raw.status === "draft" && v.pi_number) patch.status = "pi_sent";
       // a new term brings its own deposit %: only send the % when it was changed by hand
       if (patch.payment_term_id !== raw.payment_term_id && Number(patch.deposit_pct) === Number(raw.deposit_pct)) delete patch.deposit_pct;

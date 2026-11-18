@@ -1,4 +1,5 @@
 import { OrderCosts } from "@/modules/costs/LandedCosts";
+import { incotermHint, incotermText } from "./incoterms";
 import { OrderRuleChecks } from "@/modules/admin/ValidationRules";
 import { useCan } from "@/app/permissions";
 import { OrderApproval } from "@/modules/approvals/Approvals";
@@ -34,6 +35,7 @@ export default function OrderDetail() {
   const attention = useRows("v_attention").rows;
   const terms = useRows("payment_terms").rows;
   const flags = useRows(id && "v_order_flags", { eq: { sales_order_id: id } }).rows;
+  const delivery = useRows(id && "v_order_delivery", { eq: { sales_order_id: id } }).rows[0];
   const products = useRows("products").rows;
   const pos = useRows("v_purchase_orders").rows;
   const stock = useRows("v_batch_item_stock").rows;
@@ -66,7 +68,7 @@ export default function OrderDetail() {
   return <>
     <PageHeader back={{ to: "/orders", label: "Orders" }}
       title={<span className="flex flex-wrap items-center gap-3">{o.pi_number ? `PI ${o.pi_number}` : "Draft order"}<StatusPill status={o.status} /><PaymentPill status={o.payment_status} />{rec && <FavoriteStar r={rec} />}</span>}
-      sub={<>{customer ? <Link to={customerPath(customer)} className="text-gray-700 hover:text-indigo-600">{o.customer_name}</Link> : o.customer_name} · {o.order_type} · {cur}{o.customer_po ? ` · customer PO ${o.customer_po}` : ""}</>}>
+      sub={<>{customer ? <Link to={customerPath(customer)} className="text-gray-700 hover:text-indigo-600">{o.customer_name}</Link> : o.customer_name} · {o.order_type} · {cur}{delivery && delivery.incoterm !== o.order_type ? ` · ${incotermText(delivery.incoterm, delivery.delivery_place)}` : ""}{o.customer_po ? ` · customer PO ${o.customer_po}` : ""}</>}>
       {!["draft", "cancelled"].includes(o.status) && can("register_payments") && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
       <LinkButton to={`${base}/edit`} variant="outline"><Pencil />Edit</LinkButton>
       {o.pi_number && <LinkButton to={`${base}/pi`} variant="outline"><FileText />PI (PDF)</LinkButton>}
@@ -83,7 +85,7 @@ export default function OrderDetail() {
 
     <BlockGrid lay={lay} blocks={[
       { id: "path", title: "Status path", node: <div className="space-y-3"><OrderApproval o={o} /><OrderRuleChecks o={o} /><OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
-        {flags.length > 0 && <div className="-mt-3 flex flex-wrap gap-2">{flags.map(f => <span key={f.rule_id} title={`Rule: ${f.rule_name}`} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800"><Flag className="h-3.5 w-3.5" />{f.flag_text}</span>)}</div>}</div> },
+        {flags.length > 0 && <div className="-mt-3 flex flex-wrap gap-2">{flags.map(f => <span key={f.rule_id ?? f.flag_text} title={f.rule_id ? `Rule: ${f.rule_name}` : f.rule_name} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800"><Flag className="h-3.5 w-3.5" />{f.flag_text}</span>)}</div>}</div> },
       { id: "stats", title: "Key figures", node: <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Stat label="Total to receive" value={money(o.total_receivable, cur)} hint={[Number(o.vat_amount) ? `incl. VAT ${money(o.vat_amount, cur)}` : null, Number(o.adjustments) ? `incl. corrections ${money(o.adjustments, cur)}` : null].filter(Boolean).join(" · ") || `${o.line_count} line${o.line_count === 1 ? "" : "s"}`} />
       <Stat label="Received" value={money(o.paid, cur)} hint={Number(o.written_off) ? `written off ${money(o.written_off, cur)}` : o.last_payment_date ? `last on ${date(o.last_payment_date)}` : "nothing yet"} />
@@ -95,7 +97,8 @@ export default function OrderDetail() {
       { id: "actions", title: "Next actions", node: mine.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
       <div className="mb-2 flex items-center text-sm font-semibold text-amber-900"><AlertTriangle className="mr-1.5 h-4 w-4" />Next actions</div>
       <ul className="space-y-1.5 text-sm text-amber-950">{mine.map((a, i) => <li key={i} className="flex items-center gap-2"><SeverityPill s={a.severity} />{a.message}
-        {a.code === "stock_sale_without_po" && !locked && <Link to={`${base}/purchase-order`} className="ml-1 font-medium text-indigo-600 hover:underline">Create PO</Link>}</li>)}</ul></div> },
+        {a.code === "stock_sale_without_po" && !locked && <Link to={`${base}/purchase-order`} className="ml-1 font-medium text-indigo-600 hover:underline">Create PO</Link>}
+        {a.code === "transport_cost_missing" && <Link to={`/costs/new?order=${o.id}&kind=freight&back=${encodeURIComponent(base)}`} className="ml-1 font-medium text-indigo-600 hover:underline">Add transport cost</Link>}</li>)}</ul></div> },
       { id: "schedule", title: "Payment schedule", size: "half", node: <Section title="Payment schedule" sub={term ? term.name : "No payment term on this order"}
         action={!locked && <Link to={`${base}/edit`} className="text-xs font-medium text-indigo-600 hover:underline">Change term or dates</Link>}>
         <KV items={[
@@ -113,6 +116,7 @@ export default function OrderDetail() {
       { id: "details", title: "Order details", size: "half", node: <Section title="Order">
         <KV items={[
           ["PO date", date(o.po_date)], ["PI sent", date(o.pi_date)],
+          ["Delivery", delivery ? <span title={incotermHint(delivery.incoterm)}>{incotermText(delivery.incoterm, delivery.delivery_place)}{delivery.we_arrange_transport && <span className="text-gray-500"> · we arrange transport</span>}</span> : "–"],
           ["Invoice", o.invoice_number ? `${o.invoice_number} · ${date(o.invoice_date)}` : locked ? "–" : <Link to={`${base}/invoice`} className="text-indigo-600 hover:underline">Register invoice</Link>],
           ["Shipment", shipment ? <Link to={shipmentPath(shipment, "/edit")} className="text-indigo-600 hover:underline">{SHIP_LABEL[shipment.status]}{shipment.eta ? ` · ETA ${date(shipment.eta)}` : ""}</Link> : <span className="text-gray-400">none yet</span>],
           ["Note", o.notes ?? "–"],

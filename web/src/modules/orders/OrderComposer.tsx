@@ -19,6 +19,7 @@ import { date, money, pct, qty, SOURCE_LABEL, termText, today } from "@/app/form
 import { cn } from "@/lib/utils";
 import { Combobox } from "@/app/Combobox";
 import { quickCreate } from "@/app/quickCreate";
+import { INCOTERMS, incotermHint, weArrangeTransport } from "./incoterms";
 
 type Line = { key: number; product_id: string; quantity: string; unit_price: string; batch_item_id: string; batch_touched?: boolean;
   touched: boolean; source: string | null; suggestion: { price: number; source: string; moq: number | null } | null };
@@ -40,7 +41,7 @@ export default function OrderComposer() {
   const fromOrder = fromRef ? findOrder(orders.rows, fromRef) : undefined;
   const fromLines = useRows(fromOrder ? "v_order_lines" : null, { eq: { sales_order_id: fromOrder?.id }, order: [["line_no", "asc"]] });
 
-  const [h, setH] = useState({ customer_id: "", order_type: "FOB", pi_number: "", customer_po: "", po_date: today(), notes: "", payment_term_id: "" });
+  const [h, setH] = useState({ customer_id: "", order_type: "FOB", pi_number: "", customer_po: "", po_date: today(), notes: "", payment_term_id: "", incoterm: "", delivery_place: "" });
   const [lines, setLines] = useState<Line[]>([blank()]);
   const [preview, setPreview] = useState<any>(null); const [calc, setCalc] = useState(false);
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
@@ -55,6 +56,9 @@ export default function OrderComposer() {
   // the order's term: chosen here, otherwise the customer's term for this type
   const termId = h.payment_term_id || term?.payment_term_id || "";
   const payTerm = payTerms.find(t => t.id === termId);
+  // delivery term: chosen here, otherwise the customer's usual term, otherwise the one that matches the type
+  const customer = customers.rows.find(c => c.id === h.customer_id);
+  const incoterm = h.incoterm || customer?.default_incoterm || h.order_type;
 
   // start: suggested PI#, or a copy of an earlier order
   useEffect(() => {
@@ -77,7 +81,7 @@ export default function OrderComposer() {
   }, [h.order_type, productKey, stock.length]);   // eslint-disable-line react-hooks/exhaustive-deps
   const pickCustomer = (id: string) => {
     const last = orders.rows.find(o => o.customer_id === id && o.status !== "cancelled");
-    setH(x => ({ ...x, customer_id: id, order_type: last?.order_type ?? x.order_type, payment_term_id: "" }));
+    setH(x => ({ ...x, customer_id: id, order_type: last?.order_type ?? x.order_type, payment_term_id: "", incoterm: "" }));
   };
   const copyFrom = async (o: any) => {
     try { const rows = await db.select<any>("v_order_lines", { eq: { sales_order_id: o.id }, order: [["line_no", "asc"]] });
@@ -131,7 +135,7 @@ export default function OrderComposer() {
     if (!ready.length) return setErr("Add at least one order line");
     setBusy(true);
     try {
-      const ref = await db.rpc<string>("create_order", { p_order: { ...h, payment_term_id: termId || null }, p_lines: ready.map(l => ({ product_id: l.product_id, quantity: num(l.quantity), unit_price: num(l.unit_price), batch_item_id: l.batch_item_id || null })) });
+      const ref = await db.rpc<string>("create_order", { p_order: { ...h, payment_term_id: termId || null, incoterm }, p_lines: ready.map(l => ({ product_id: l.product_id, quantity: num(l.quantity), unit_price: num(l.unit_price), batch_item_id: l.batch_item_id || null })) });
       refresh(); nav(`/orders/${encodeURIComponent(ref)}`);
     } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
   };
@@ -172,12 +176,19 @@ export default function OrderComposer() {
             <Field id="pi" label="PI#" value={h.pi_number} onChange={v => setH(x => ({ ...x, pi_number: v }))} hint={nextPi && h.pi_number === nextPi ? "Next free number" : "Empty = save as draft"} />
             <Field id="cpo" label="Customer PO#" value={h.customer_po} onChange={v => setH(x => ({ ...x, customer_po: v }))} />
             <Field id="date" label="PO date" type="date" value={h.po_date} onChange={v => setH(x => ({ ...x, po_date: v }))} />
-            <div className="col-span-2 md:col-span-4">
+            <div className="col-span-2">
               <Label htmlFor="term" className="mb-1.5 block text-sm font-medium text-gray-700">Payment term</Label>
               <select id="term" className={selectClass + " w-full"} value={termId} onChange={e => setH(x => ({ ...x, payment_term_id: e.target.value }))}>
                 <option value="">–</option>{payTerms.filter(t => t.active || t.id === termId).map(t => <option key={t.id} value={t.id}>{t.name}{t.id === term?.payment_term_id ? " (customer's term)" : ""}</option>)}</select>
               {payTerm && <p className="mt-1.5 text-xs text-gray-500">{termText(payTerm)}</p>}
             </div>
+            <div className="col-span-2">
+              <Label htmlFor="incoterm" className="mb-1.5 block text-sm font-medium text-gray-700">Delivery terms</Label>
+              <select id="incoterm" className={selectClass + " w-full"} value={incoterm} onChange={e => setH(x => ({ ...x, incoterm: e.target.value }))}>
+                {INCOTERMS.map(t => <option key={t.code} value={t.code}>{t.label}{t.code === customer?.default_incoterm ? " (customer's usual)" : ""}</option>)}</select>
+              <p className="mt-1.5 text-xs text-gray-500">{incotermHint(incoterm)}</p>
+            </div>
+            <Field wide id="place" label="Delivery place" value={h.delivery_place} onChange={v => setH(x => ({ ...x, delivery_place: v }))} hint={weArrangeTransport(incoterm) ? "Where we deliver, e.g. the customer's warehouse" : "Optional"} />
           </div>
           {h.customer_id && lastOrder && !fromOrder && !lines.some(l => l.product_id) && <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/60 px-5 py-3 text-sm">
             <span className="text-gray-600">Same products as last time?</span>
@@ -246,6 +257,7 @@ export default function OrderComposer() {
             {below > 0 && <li>{below} line(s) are sold below the cost basis.</li>}
             {moqWarn.map(l => <li key={l.key}>{prod[l.product_id]?.name}: quantity below the MOQ of {qty(l.suggestion!.moq)}.</li>)}
           </ul></Notice>}
+        {weArrangeTransport(incoterm) && costs && <Notice tone="amber" title={`${incoterm}: we arrange the transport`}>The margin above has no transport cost yet. Add the forwarder's invoice on the order page once you have it; until then the order is marked "Transport cost missing".</Notice>}
         {err && <Notice tone="rose"><span className="inline-flex items-start gap-1.5"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{err}</span></Notice>}
         <div className="flex gap-2">
           <Button className="flex-1" onClick={submit} disabled={busy || blocked.length > 0}>{busy ? "Saving…" : h.pi_number.trim() ? (policy ? "Save and ask for approval" : `Create PI ${h.pi_number.trim()}`) : "Save as draft"}</Button>
@@ -257,8 +269,8 @@ export default function OrderComposer() {
   </>;
 }
 
-function Field({ id, label, value, onChange, type, hint }: { id: string; label: string; value: string; onChange: (v: string) => void; type?: string; hint?: string }) {
-  return <div className="col-span-2 sm:col-span-1">
+function Field({ id, label, value, onChange, type, hint, wide }: { id: string; label: string; value: string; onChange: (v: string) => void; type?: string; hint?: string; wide?: boolean }) {
+  return <div className={wide ? "col-span-2" : "col-span-2 sm:col-span-1"}>
     <Label htmlFor={id} className="mb-1.5 block text-sm font-medium text-gray-700">{label}</Label>
     <Input id={id} type={type ?? "text"} value={value} onChange={e => onChange(e.target.value)} className="h-9 border-gray-300" />
     {hint && <p className="mt-1.5 text-xs text-gray-500">{hint}</p>}

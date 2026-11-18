@@ -16,6 +16,7 @@ import { FavoriteStar, useRecord } from "@/app/Favorites";
 import { BlockGrid, CustomizeButton, useLayout } from "@/app/Layout";
 import { findSimilar } from "@/app/duplicates";
 import type { ReactNode } from "react";
+import { INCOTERMS, INCOTERM_OPTIONS, incotermHint } from "@/modules/orders/incoterms";
 
 /** "a similar customer already exists" with links, shown on the form before a new one is saved */
 export const similarWarning = (kind: string, sims: { name: string }[], pathOf: (x: { name: string }) => string, go: () => Promise<any>) => ({ confirm: {
@@ -72,7 +73,7 @@ export function CustomerDetail() {
       <Stat label="Last payment" value={lastPay ? date(lastPay) : "–"} hint={lastPay ? "received" : "nothing received yet"} />
     </div> },
       { id: "contacts", title: "Contacts", size: "half", node: <ContactsSection party="customer" p={c} /> },
-      { id: "terms", title: "Payment terms", size: "half", node: <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)]]} /></Section> },
+      { id: "terms", title: "Payment terms", size: "half", node: <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)], ["Delivery", c.default_incoterm ? <span title={incotermHint(c.default_incoterm)}>{INCOTERMS.find(t => t.code === c.default_incoterm)?.label}</span> : "Follows the order type"]]} /></Section> },
       { id: "details", title: "Details", size: "half", node: <Section title="Details"><KV items={[["Address", c.address || c.country ? <span className="whitespace-pre-line">{[c.address, c.country].filter(Boolean).join("\n")}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section> },
       { id: "notes", title: "Notes", size: "half", node: <NotesSection party="customer" p={c} /> },
       { id: "health", title: "Health", size: "half", node: <CustomerHealth customerId={c.id} /> },
@@ -108,6 +109,8 @@ export function CustomerForm() {
   const fields: Field[] = [...customerFields.slice(0, -1),
     { name: "exw_term", label: "EXW payment term", type: "select", options: opts(row?.exw?.payment_term_id), section: "Payment terms" },
     { name: "fob_term", label: "FOB payment term", type: "select", options: opts(row?.fob?.payment_term_id), section: "Payment terms", hint: "Terms are managed under Admin → Payment terms." },
+    { name: "default_incoterm", label: "Usual delivery terms", type: "select", options: INCOTERM_OPTIONS, section: "Delivery",
+      hint: "Filled in on new orders (can be changed per order). Empty = follows the order type: EXW or FOB." },
     customerFields[customerFields.length - 1]];
   return <FormPage title={row ? `Edit ${row.name}` : "New customer"} sub="A new term applies to new orders; existing orders keep the term they were created with (change it on the order)."
     back={row ? { to: customerPath(row), label: row.name } : { to: "/customers", label: "Customers" }} fields={fields}
@@ -115,6 +118,7 @@ export function CustomerForm() {
     onSubmit={async v => {
       const doSave = async () => {
       const { exw_term, fob_term, ...c } = v;
+      c.default_incoterm = c.default_incoterm || null;
       const id = row ? (await db.update("customers", { id: row.id }, c), row.id) : (await db.insert("customers", c)).id;
       for (const [type, term] of [["EXW", exw_term], ["FOB", fob_term]] as const) {
         if (!term) continue;

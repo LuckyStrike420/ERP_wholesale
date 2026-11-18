@@ -14,6 +14,7 @@ import { orderPath } from "@/app/paths";
 import { Loading, NotFound, Notice } from "@/app/ui";
 import { date, money, pct, qty, termWhen } from "@/app/format";
 import { useOrder } from "./data";
+import { incotermText, weArrangeTransport } from "./incoterms";
 
 /** unit prices keep the decimals they were agreed with: $0.98, $0.845, $8.25 */
 const unitPrice = (v: any, cur: string) => `${cur === "USD" ? "$" : "€"}${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
@@ -29,6 +30,7 @@ function SalesDocument({ kind }: { kind: "pi" | "invoice" }) {
   const products = useRows("products").rows; const customers = useRows("customers").rows;
   const rawLines = useRows(id && "sales_order_lines", { eq: { sales_order_id: id } }).rows;
   const settings = useRows("app_settings").rows; const adjustments = useRows(id && "order_adjustments", { eq: { sales_order_id: id } }).rows;
+  const delivery = useRows(id && "v_order_delivery", { eq: { sales_order_id: id } }).rows[0];
   const links = useRows(id && "shipment_orders", { eq: { sales_order_id: id } }).rows; const ships = useRows("v_shipments").rows;
   if (!o) return loading ? <Loading /> : <NotFound what={`Order ${ref}`} back={{ to: "/orders", label: "All orders" }} />;
   if (lines.loading) return <Loading />;
@@ -38,7 +40,12 @@ function SalesDocument({ kind }: { kind: "pi" | "invoice" }) {
   const ship = ships.find(s => links.some(l => l.shipment_id === s.id));
   const cur = o.currency; const missing = ["company_name", "company_address", "company_bank"].filter(k => !set(k));
   const term = terms.find(t => t.id === o.payment_term_id);
-  const balanceWhen = term ? termWhen(term.balance_anchor, term.balance_days) : o.order_type === "FOB" ? "before shipment / 10 days before ETA" : o.payment_days ? `${o.payment_days} days after invoice` : "before pick-up";
+  // delivery term with its named place: the place on the order, else the port of loading (FOB) or the customer's city (DAP/DDP)
+  const inco = delivery?.incoterm ?? o.order_type;
+  const incoPlace = delivery?.delivery_place
+    || (inco === "FOB" && ship?.port_loading ? place(ship.port_loading, ship.port_loading_country) : "")
+    || (weArrangeTransport(inco) ? place(c.city, c.country) : "");
+  const balanceWhen = term ? termWhen(term.balance_anchor, term.balance_days) : o.order_type === "FOB" ? "before shipment / 10 days before ETA" : o.payment_days ? `${o.payment_days} days after invoice` : weArrangeTransport(delivery?.incoterm) ? "before delivery" : "before pick-up";
   const depositWhen = term ? termWhen(term.deposit_anchor, term.deposit_days) : "on confirmation";
   const inv = kind === "invoice";
   if (inv && !o.invoice_number) return <Notice tone="amber">No invoice is registered on PI {o.pi_number} yet. <Link to={orderPath(o, "/invoice")} className="font-medium underline">Register the invoice</Link> first.</Notice>;
@@ -64,7 +71,7 @@ function SalesDocument({ kind }: { kind: "pi" | "invoice" }) {
             <dt>PI number</dt><dd className={inv ? "" : "font-semibold text-gray-900"}>{o.pi_number}</dd>
             <dt>Date</dt><dd>{date(inv ? o.invoice_date : o.pi_date ?? o.po_date)}</dd>
             {o.customer_po && <><dt>Your PO</dt><dd>{o.customer_po}</dd></>}
-            <dt>Terms</dt><dd>{o.order_type}{o.order_type === "FOB" && ship?.port_loading ? ` ${place(ship.port_loading, ship.port_loading_country)}` : ""}</dd>
+            <dt>Terms</dt><dd>{incotermText(inco, incoPlace)}</dd>
             <dt>Currency</dt><dd>{cur}</dd>
           </dl>
         </div>

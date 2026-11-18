@@ -113,7 +113,7 @@ export function LandedCostForm() {
   return <>
     <FormPage title={c ? `${KIND_LABEL[c.kind]} on ${on}` : `Extra cost on ${on}`} back={{ to: back, label: "Back" }} done={back} fields={fields}
       sub={sh ? "Spread over every order on this shipment." : o ? "Counts in this order's cost price." : b ? "Spread over the products of this batch, then added per piece to every EXW sale from it and to the stock value." : undefined}
-      initial={c ?? { kind: "freight", currency: b ? "EUR" : o?.currency ?? "USD", allocate_by: b ? "quantity" : "value" }}
+      initial={c ?? { kind: q.get("kind") ?? "freight", currency: b ? "EUR" : o?.currency ?? "USD", allocate_by: b ? "quantity" : "value" }}
       onSubmit={async v => {
         const body = { kind: v.kind, description: v.description || null, amount: v.amount, currency: v.currency, allocate_by: v.allocate_by,
           supplier_id: v.supplier_id || null, invoice_number: v.invoice_number || null, invoice_date: v.invoice_date || null };

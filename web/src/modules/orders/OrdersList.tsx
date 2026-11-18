@@ -29,6 +29,9 @@ export default function OrdersList() {
   const customers = useRows("customers", { order: [["name", "asc"]] }).rows;
   const views = useRows("saved_views", { eq: { page: "orders" }, order: [["name", "asc"]] }).rows;
   const flags = useRows("v_order_flags").rows;
+  const delivery = useRows("v_order_delivery").rows;
+  // the order type, plus the delivery term when it is another one (e.g. "EXW · DDP")
+  const typeOf = (o: any) => { const t = delivery.find(d => d.sales_order_id === o.id)?.incoterm; return t && t !== o.order_type ? `${o.order_type} · ${t}` : o.order_type; };
   const flagOf = (id: string) => flags.filter(f => f.sales_order_id === id).map(f => f.flag_text).join(" · ");
   const [naming, setNaming] = useState<string | null>(null);
 
@@ -82,13 +85,13 @@ export default function OrdersList() {
           <Button size="sm" className="h-7 px-2.5 text-xs" onClick={saveView} disabled={!naming.trim()}>Save</Button><Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setNaming(null)}>Cancel</Button></span>}
     </div>
 
-    {view === "board" ? <Board orders={shown} showDone={status === "all" || status === "completed"} flagOf={flagOf} /> :
+    {view === "board" ? <Board orders={shown} showDone={status === "all" || status === "completed"} flagOf={flagOf} typeOf={typeOf} /> :
       <Section>
         <DataTable rows={shown} exportName="orders" rowTo={o => orderPath(o)} empty="No orders match this filter" selectable bulk={(sel, clear) => <OrdersBulk rows={sel} clear={clear} />}
           cols={[
             { key: "pi_number", header: "PI#", render: o => <span className="inline-flex items-center gap-1.5 font-semibold text-gray-900">{o.pi_number ?? <span className="font-normal text-gray-400">draft</span>}
                 {flagOf(o.id) && <Flag className="h-3.5 w-3.5 text-amber-500" aria-label={flagOf(o.id)}><title>{flagOf(o.id)}</title></Flag>}</span> },
-            { key: "customer_name", header: "Customer", render: o => <div><div className="text-gray-900">{o.customer_name}</div><div className="text-xs text-gray-500">{o.order_type}</div></div> },
+            { key: "customer_name", header: "Customer", render: o => <div><div className="text-gray-900">{o.customer_name}</div><div className="text-xs text-gray-500">{typeOf(o)}</div></div> },
             { key: "customer_po", header: "Customer PO", render: o => o.customer_po ?? <span className="text-gray-400">–</span>, edit: { kind: "text", save: (o, v) => db.update("sales_orders", { id: o.id }, { customer_po: v }), can: o => !["completed", "cancelled"].includes(o.status) } },
             { key: "po_date", header: "PO date", render: o => date(o.po_date), edit: { kind: "date", save: (o, v) => db.update("sales_orders", { id: o.id }, { po_date: v }), can: o => !["completed", "cancelled"].includes(o.status) } },
             { key: "status", header: "Status", render: o => <StatusPill status={o.status} />, edit: { kind: "select", options: STATUS_ORDER.filter(s => s !== "draft").map(s => ({ value: s, label: STATUS_LABEL[s] })),
@@ -129,7 +132,7 @@ function OrdersBulk({ rows, clear }: { rows: any[]; clear: () => void }) {
 }
 
 // ---------------- board ----------------
-function Board({ orders, showDone, flagOf }: { orders: any[]; showDone: boolean; flagOf: (id: string) => string }) {
+function Board({ orders, showDone, flagOf, typeOf }: { orders: any[]; showDone: boolean; flagOf: (id: string) => string; typeOf: (o: any) => string }) {
   const { db, run } = useApp(); const nav = useNav();
   const tasks = useRows("v_tasks", { eq: { status: "open" } }).rows;
   const [over, setOver] = useState<string | null>(null); const [dragging, setDragging] = useState<any>(null);
@@ -161,7 +164,7 @@ function Board({ orders, showDone, flagOf }: { orders: any[]; showDone: boolean;
                 onClick={() => nav(orderPath(o))} className={cn("cursor-pointer rounded-lg border bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing", late ? "border-rose-200" : "border-gray-200", dragging?.id === o.id && "opacity-50")}>
                 <div className="flex items-start justify-between gap-2">
                   <span className="font-semibold text-gray-900">{o.pi_number ? `PI ${o.pi_number}` : "Draft"}</span>
-                  <span className="text-xs text-gray-400">{o.order_type}</span>
+                  <span className="text-xs text-gray-400">{typeOf(o)}</span>
                 </div>
                 <div className="mt-0.5 truncate text-sm text-gray-700">{o.customer_name}</div>
                 <div className="mt-2 flex items-end justify-between gap-2">
