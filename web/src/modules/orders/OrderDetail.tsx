@@ -1,3 +1,4 @@
+import { OrderRuleChecks } from "@/modules/admin/ValidationRules";
 import { useCan } from "@/app/permissions";
 import { OrderApproval } from "@/modules/approvals/Approvals";
 import { OrderShipment, OrderSupplierPayments } from "./OrderSupply";
@@ -5,7 +6,7 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, Ban, Flag, ClipboardList, Copy, FileText, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApp, useRows } from "@/app/store";
-import { Link, useParams } from "@/app/router";
+import { Link, useNav, useParams } from "@/app/router";
 import { customerPath, orderPath, poPath, shipmentPath } from "@/app/paths";
 import { ConfirmDialog, DataTable, KV, LinkButton, Loading, NotFound, PageHeader, PaymentPill, Pill, Section, SeverityPill, Stat, StatusPill, selectClass, type Col } from "@/app/ui";
 import { date, money, marginPct, pct, qty, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER, SHIP_LABEL, termWhen } from "@/app/format";
@@ -43,7 +44,7 @@ export default function OrderDetail() {
 
   const rec = o ? { type: "order" as const, id: o.id, label: o.pi_number ? `PI ${o.pi_number}` : "Draft order", path: orderPath(o), sub: o.customer_name } : null;
   useRecord(rec);
-  const lay = useLayout("order"); const can = useCan(); const costs = can("see_costs");
+  const lay = useLayout("order"); const nav = useNav(); const can = useCan(); const costs = can("see_costs");
   if (!o) return loading ? <Loading what="Loading order…" /> : <NotFound what={`Order ${ref}`} back={{ to: "/orders", label: "All orders" }} />;
   const cur = o.currency; const locked = ["completed", "cancelled"].includes(o.status);
   const base = orderPath(o);
@@ -74,10 +75,13 @@ export default function OrderDetail() {
       {!locked && o.status_rank < 60 && <Button variant="outline" className="text-rose-600" onClick={() => setConfirm({ title: "Cancel this order?", label: "Cancel order",
         body: "The order leaves revenue and open amounts. Payments already received stay visible as customer credit. This cannot be undone.",
         go: () => run(() => db.update("sales_orders", { id: o.id }, { status: "cancelled" }), "Order cancelled") })}><Ban className="h-4 w-4" />Cancel order</Button>}
+      {can("delete_records") && (o.status === "draft" || o.status === "cancelled") && <Button variant="ghost" className="text-rose-600" onClick={() => setConfirm({ title: `Delete ${o.pi_number ? `PI ${o.pi_number}` : "this draft"}?`, label: "Delete order",
+        body: "The order, its lines, tasks, notes and documents go to the recycle bin and can be restored there for 30 days (Admin → Recycle bin). An order with payments, a shipment or an invoice cannot be deleted.",
+        go: () => run(async () => { await db.remove("sales_orders", { id: o.id }); return true; }, "Order deleted; restore it from Admin → Recycle bin within 30 days").then(ok => { if (ok) nav("/orders"); }) })}><Trash2 className="h-4 w-4" />Delete</Button>}
     </PageHeader>
 
     <BlockGrid lay={lay} blocks={[
-      { id: "path", title: "Status path", node: <div className="space-y-3"><OrderApproval o={o} /><OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
+      { id: "path", title: "Status path", node: <div className="space-y-3"><OrderApproval o={o} /><OrderRuleChecks o={o} /><OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
         {flags.length > 0 && <div className="-mt-3 flex flex-wrap gap-2">{flags.map(f => <span key={f.rule_id} title={`Rule: ${f.rule_name}`} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800"><Flag className="h-3.5 w-3.5" />{f.flag_text}</span>)}</div>}</div> },
       { id: "stats", title: "Key figures", node: <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Stat label="Total to receive" value={money(o.total_receivable, cur)} hint={[Number(o.vat_amount) ? `incl. VAT ${money(o.vat_amount, cur)}` : null, Number(o.adjustments) ? `incl. corrections ${money(o.adjustments, cur)}` : null].filter(Boolean).join(" · ") || `${o.line_count} line${o.line_count === 1 ? "" : "s"}`} />
@@ -131,7 +135,7 @@ export default function OrderDetail() {
               : !locked && Number(l.qty) > 0 ? <Link to={`${base}/purchase-order`} className="text-xs font-medium text-amber-700 hover:underline">no PO · create</Link> : "–" },
           { key: "batch", header: "Batch", value: l => batchNo[l.batch_item_id], render: l => batchNo[l.batch_item_id] ?? "–" },
           { key: "act", header: "", width: "3rem", render: l => locked || !can("delete_records") ? null : <Button size="icon" variant="ghost" aria-label={`Remove line ${l.line_no}`} className="h-7 w-7 text-gray-400 hover:text-rose-600"
-              onClick={e => { e.stopPropagation(); setConfirm({ title: "Remove this line?", label: "Remove line", body: `${pName[l.product_id]}, ${qty(l.quantity)} pieces. To keep the history, set "quantity cancelled" on the line instead.`,
+              onClick={e => { e.stopPropagation(); setConfirm({ title: "Remove this line?", label: "Remove line", body: `${pName[l.product_id]}, ${qty(l.quantity)} pieces. It stays 30 days in Admin → Recycle bin. To keep the history, set "quantity cancelled" on the line instead.`,
                 go: () => run(() => db.remove("sales_order_lines", { id: l.id }), "Line removed") }); }}><Trash2 className="h-3.5 w-3.5" /></Button> },
         ] as Col[]).filter(c => costs || !["unit_cost", "margin", "po"].includes(c.key))} />
     </Section> },

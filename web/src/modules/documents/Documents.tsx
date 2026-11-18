@@ -63,7 +63,7 @@ export function DocumentsSection({ entity, id, className }: { entity: "sales_ord
           <Button size="icon" variant="ghost" className="h-7 w-7 text-gray-400 hover:text-gray-900" aria-label={`Open ${d.file_name}`} onClick={() => open(d)}><Download className="h-3.5 w-3.5" /></Button>
           <Button size="icon" variant="ghost" className="h-7 w-7 text-gray-400 hover:text-rose-600" aria-label={`Remove ${d.file_name}`} onClick={() => setRemove(d)}><Trash2 className="h-3.5 w-3.5" /></Button>
         </li>))}</ul>}
-    <ConfirmDialog open={!!remove} onClose={() => setRemove(null)} danger title="Remove this document?" body={remove ? `${remove.file_name} is deleted for everyone. This cannot be undone.` : ""}
-      confirmLabel="Remove" onConfirm={() => { const d = remove; run(async () => { await db.remove("attachments", { id: d.id }); await db.removeFile(d.storage_path); }, "Document removed"); }} />
+    <ConfirmDialog open={!!remove} onClose={() => setRemove(null)} danger title="Remove this document?" body={remove ? `${remove.file_name} is removed for everyone. It stays 30 days in Admin → Recycle bin, where it can be restored.` : ""}
+      confirmLabel="Remove" onConfirm={() => { const d = remove; run(async () => { await db.remove("attachments", { id: d.id }); }, "Document removed"); }} />
   </Section>;
 }

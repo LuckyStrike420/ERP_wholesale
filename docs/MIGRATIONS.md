@@ -33,6 +33,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0027_address_cleared.sql` | `0027_address_cleared` | ja (18 nov 2026) |
 | `0028_insights.sql` | `0028_insights` | ja (18 nov 2026) |
 | `0029_health_currency.sql` | `0029_health_currency` | ja (18 nov 2026) |
+| `0030_bin_rules_rates.sql` | `0030_bin_rules_rates` | ja (18 nov 2026) |
 
 ## Regels
 

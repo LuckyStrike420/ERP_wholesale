@@ -18,7 +18,7 @@ const changed = (a: any) => {
 };
 export const AdminHead = () => <>
   <PageHeader title="Admin" sub="Settings, payment terms, exchange rates, users, the audit log and the workbook import." />
-  <TabLinks tabs={[{ to: "/admin", label: "Settings" }, { to: "/admin/payment-terms", label: "Payment terms" }, { to: "/admin/automations", label: "Automations" }, { to: "/admin/approvals", label: "Approvals" }, { to: "/admin/rates", label: "Exchange rates" }, { to: "/admin/users", label: "Users" }, { to: "/admin/permissions", label: "Permissions" }, { to: "/admin/audit", label: "Audit log" }, { to: "/admin/import", label: "Import" }]} />
+  <TabLinks tabs={[{ to: "/admin", label: "Settings" }, { to: "/admin/payment-terms", label: "Payment terms" }, { to: "/admin/automations", label: "Automations" }, { to: "/admin/approvals", label: "Approvals" }, { to: "/admin/validation-rules", label: "Validation rules" }, { to: "/admin/rates", label: "Exchange rates" }, { to: "/admin/users", label: "Users" }, { to: "/admin/permissions", label: "Permissions" }, { to: "/admin/audit", label: "Audit log" }, { to: "/admin/recycle-bin", label: "Recycle bin" }, { to: "/admin/import", label: "Import" }]} />
 </>;
 
 export function Settings() {
@@ -52,8 +52,10 @@ export function SettingForm() {
 }
 
 export function Rates() {
-  const rates = useRows("fx_rates", { order: [["rate_date", "desc"]] }).rows;
-  return <><AdminHead /><Section title="Exchange rates for the combined EUR total" action={<LinkButton size="sm" to="/admin/rates/new"><Plus />Add rate</LinkButton>}>
+  const rates = useRows("fx_rates", { order: [["rate_date", "desc"]] }).rows; const { db, run, refresh } = useApp();
+  const fetchNow = () => run(async () => { const n = await db.rpc<number>("fetch_ecb_rates", {}); refresh(); return n; }, "ECB rates fetched");
+  return <><AdminHead /><Section title="Exchange rates for the combined EUR total" sub="ECB reference rates are fetched automatically every working day (after 16:00). A rate you add by hand for the same day is kept."
+    action={<span className="flex gap-2"><Button size="sm" variant="outline" onClick={fetchNow}>Fetch ECB rates now</Button><LinkButton size="sm" to="/admin/rates/new"><Plus />Add rate</LinkButton></span>}>
     <DataTable rows={rates.map(r => ({ ...r, id: r.rate_date + r.currency }))} empty="No rates yet: reports show EUR and USD separately, without a combined total"
       cols={[{ key: "rate_date", header: "From date", render: r => date(r.rate_date) }, { key: "currency", header: "Currency" },
         { key: "rate", header: "1 unit in EUR", align: "right", render: r => money(r.rate, null, 4) }, { key: "source", header: "Source" }]} />

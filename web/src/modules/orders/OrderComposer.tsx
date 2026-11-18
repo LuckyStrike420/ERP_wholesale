@@ -47,7 +47,7 @@ export default function OrderComposer() {
   const started = useRef(false);
 
   const prod = useMemo(() => Object.fromEntries(products.rows.map(p => [p.id, p])), [products.rows]);
-  const policies = useRows("approval_policies").rows; const costs = useCan()("see_costs");
+  const policies = useRows("approval_policies").rows; const vrules = useRows("validation_rules", { eq: { status: "pi_sent" } }).rows; const costs = useCan()("see_costs");
   const nextPi = useMemo(() => { const n = orders.rows.map(o => Number(o.pi_number)).filter(Number.isInteger); return n.length ? String(Math.max(...n) + 1) : ""; }, [orders.rows]);
   const cur = h.order_type === "FOB" ? "USD" : "EUR";
   const lastOrder = h.customer_id ? orders.rows.find(o => o.customer_id === h.customer_id && o.status !== "cancelled") : undefined;
@@ -140,6 +140,9 @@ export default function OrderComposer() {
   const o = preview?.order;
   const missing = Number(o?.cost_missing_lines ?? 0);
   const below = (preview?.lines ?? []).filter((x: any) => x.below_basis).length;
+  // validation rules for "PI sent" that can be judged here already
+  const known: Record<string, boolean> = { customer_po: !!h.customer_po.trim(), po_date: !!h.po_date, payment_term: !!h.payment_term_id, pi_number: !!h.pi_number.trim() };
+  const blocked = h.pi_number.trim() ? vrules.filter(r => r.active && (!r.order_type || r.order_type === h.order_type) && r.requirement in known && !known[r.requirement]) : [];
   const policy = !missing && o?.margin_pct != null ? policies.filter(p => p.active && (!p.order_type || p.order_type === h.order_type) && Number(o.margin_pct) < Number(p.margin_below))
     .sort((a, b) => Number(b.margin_below) - Number(a.margin_below))[0] : undefined;
   const moqWarn = lines.filter(l => l.suggestion?.moq && num(l.quantity) != null && num(l.quantity)! < l.suggestion.moq);
@@ -235,6 +238,7 @@ export default function OrderComposer() {
             {o?.balance_due_date && <Row label="Balance due" value={date(o.balance_due_date)} />}
           </div>
         </Section>
+        {blocked.length > 0 && <Notice tone="rose" title="The PI cannot go out yet">{blocked.map(r => r.message || r.name).join("; ")}. Fill it in, or save without a PI number as a draft.</Notice>}
         {policy && <Notice tone="amber" title="Needs approval">The margin of {pct(o.margin_pct)} is below {pct(policy.margin_below)} ({policy.name}). {h.pi_number.trim() ? "The order is saved as a draft and an approval request goes out; the PI follows once it is approved." : "Ask for approval on the order page before the PI goes out."}</Notice>}
         {(missing > 0 || below > 0 || moqWarn.length > 0) && <Notice tone="amber" title="Check before saving">
           <ul className="space-y-1">
@@ -244,7 +248,7 @@ export default function OrderComposer() {
           </ul></Notice>}
         {err && <Notice tone="rose"><span className="inline-flex items-start gap-1.5"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{err}</span></Notice>}
         <div className="flex gap-2">
-          <Button className="flex-1" onClick={submit} disabled={busy}>{busy ? "Saving…" : h.pi_number.trim() ? (policy ? "Save and ask for approval" : `Create PI ${h.pi_number.trim()}`) : "Save as draft"}</Button>
+          <Button className="flex-1" onClick={submit} disabled={busy || blocked.length > 0}>{busy ? "Saving…" : h.pi_number.trim() ? (policy ? "Save and ask for approval" : `Create PI ${h.pi_number.trim()}`) : "Save as draft"}</Button>
           <Button variant="ghost" onClick={() => nav("/orders")}>Cancel</Button>
         </div>
         <p className="text-xs text-gray-500">Prices: customer agreement, then standard agreement, then the product's standard price. Purchase prices: override, batch, agreement, product rule.</p>

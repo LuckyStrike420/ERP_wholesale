@@ -253,7 +253,7 @@ function Editor({ o, initial }: { o: any; initial: Doc }) {
       </section>}
     </article>
 
-    <ConfirmDialog open={ask === "delete"} onClose={() => setAsk(null)} danger title={`Delete ${d.doc_number}?`} body="The document is removed. The order does not change." confirmLabel="Delete"
+    <ConfirmDialog open={ask === "delete"} onClose={() => setAsk(null)} danger title={`Delete ${d.doc_number}?`} body="The document is removed; the order does not change. It stays 30 days in Admin → Recycle bin." confirmLabel="Delete"
       onConfirm={async () => { try { await db.remove("generated_documents", { id: d.id }); refresh(); toast.success("Document deleted"); nav(orderPath(o)); } catch (e) { toast.error(errorText(e)); } }} />
     <ConfirmDialog open={ask === "refill"} onClose={() => setAsk(null)} title="Fill again from the order?" confirmLabel="Fill again"
       body="Addresses, shipment details and lines are taken again from the order, the products and the shipment. Your changes to this document are replaced (only after you save)." onConfirm={refill} />

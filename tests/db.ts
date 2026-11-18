@@ -6,6 +6,8 @@ export async function freshDb(today = '2026-11-10'): Promise<PGlite> {
   const db = new PGlite();
   await applyMigrations(db);
   await db.exec(`set app.today = '${today}'`);
+  // the starting validation rules (0030) are switched off here, so each test only meets the rules it switches on
+  await db.exec(`update validation_rules set active = false`);
   return db;
 }
 

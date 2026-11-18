@@ -2,6 +2,8 @@
  * All pages and their URLs, in one place. Specific paths come before paths with a :parameter.
  * `section` decides which item in the side menu is highlighted.
  */
+import { RecycleBin } from "@/modules/admin/RecycleBin";
+import { ValidationRules, ValidationRuleForm } from "@/modules/admin/ValidationRules";
 import { CustomersHealthPage } from "@/modules/insights/HealthPage";
 import { Permissions } from "@/modules/admin/Permissions";
 import type { ComponentType } from "react";
@@ -42,7 +44,8 @@ export const ROUTES: Route[] = [
   r("/payments", "payments", ToReceive), r("/payments/suppliers", "payments", ToPay), r("/payments/ledger", "payments", Ledger),
   r("/payments/:id/void", "payments", VoidPayment),
   r("/approvals", "approvals", () => <Approvals tab="open" />), r("/approvals/all", "approvals", () => <Approvals tab="all" />),
-  r("/admin/permissions", "admin", Permissions), r("/admin/approvals", "admin", ApprovalPolicies), r("/admin/approvals/new", "admin", ApprovalPolicyForm), r("/admin/approvals/:id", "admin", ApprovalPolicyForm),
+  r("/admin/permissions", "admin", Permissions), r("/admin/recycle-bin", "admin", RecycleBin),
+  r("/admin/validation-rules", "admin", ValidationRules), r("/admin/validation-rules/new", "admin", ValidationRuleForm), r("/admin/validation-rules/:id", "admin", ValidationRuleForm), r("/admin/approvals", "admin", ApprovalPolicies), r("/admin/approvals/new", "admin", ApprovalPolicyForm), r("/admin/approvals/:id", "admin", ApprovalPolicyForm),
   r("/tasks", "tasks", Tasks), r("/tasks/new", "tasks", TaskForm), r("/tasks/:id", "tasks", TaskForm),
   r("/purchasing", "purchasing", PurchaseOrders), r("/purchasing/new", "purchasing", PurchaseOrderNew),
   r("/purchasing/:po", "purchasing", PurchaseOrderDetail), r("/purchasing/:po/edit", "purchasing", PurchaseOrderEdit),
