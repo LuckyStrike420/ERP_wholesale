@@ -9,7 +9,10 @@ const C = createContext<Ctx>(null as any);
 export const useApp = () => useContext(C);
 
 /** readable message from a database rule that refused something */
-export const errorText = (e: any) => String(e?.message ?? e).replace(/^error:\s*/i, "")
+const isTimeout = (e: any) => /statement timeout|57014/i.test(String(e?.message ?? e) + String(e?.code ?? ""));
+export const errorText = (e: any) => isTimeout(e)
+  ? "The database was too busy to answer in time, so this was not done. Try again in a moment."
+  : String(e?.message ?? e).replace(/^error:\s*/i, "")
   .replace(/duplicate key value violates unique constraint "payments_no_duplicates"/, "This payment is already booked (same party, date, amount and reference)")
   .replace(/duplicate key value violates unique constraint "(\w+)"/, "Already exists: this value must be unique ($1)")
   .replace(/new row for relation "(\w+)" violates check constraint "(\w+)"/, "Not allowed for $1 ($2)")
@@ -53,9 +56,11 @@ function fetchShared<T>(db: DataClient, key: string, from: string, opts: SelectO
   if (hit && hit.version === version) return hit.promise ?? Promise.resolve(hit.rows);
   const entry = { version, rows: hit?.rows ?? [], promise: undefined as Promise<any[]> | undefined };
   setPending(1);
-  entry.promise = limited(() => db.select<T>(from, opts))
+  // a busy database (statement timeout) gets one quiet second try before we bother the user
+  const load = () => limited(() => db.select<T>(from, opts));
+  entry.promise = load().catch(e => isTimeout(e) ? new Promise(r => setTimeout(r, 3000)).then(load) : Promise.reject(e))
     .then(rows => { entry.rows = rows; entry.promise = undefined; return rows; })
-    .catch(e => { cache.delete(key); throw e; })
+    .catch(e => { entry.promise = undefined; entry.version = -1; throw e; })   // keep the old rows; fetch again next time
     .finally(() => setPending(-1));
   cache.set(key, entry);
   return entry.promise as Promise<T[]>;
@@ -76,7 +81,8 @@ export function useRows<T = any>(from: string | null, opts: SelectOpts = {}): { 
     if (hit && state.key !== key) setState({ key, rows: hit.rows as T[], loading: false });   // show what we already know
     fetchShared<T>(db, key, from, opts, version)
       .then(rows => { if (live) setState({ key, rows, loading: false }); })
-      .catch(e => { if (live) { toast.error(errorText(e)); setState({ key, rows: [], loading: false }); } });
+      // keep showing what was loaded before rather than an empty page
+      .catch(e => { if (live) { toast.error(errorText(e)); setState({ key, rows: (cache.get(key)?.rows ?? (state.key === key ? state.rows : [])) as T[], loading: false }); } });
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [db, key, version]);
