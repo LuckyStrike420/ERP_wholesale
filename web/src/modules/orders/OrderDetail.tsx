@@ -1,3 +1,4 @@
+import { OrderCosts } from "@/modules/costs/LandedCosts";
 import { OrderRuleChecks } from "@/modules/admin/ValidationRules";
 import { useCan } from "@/app/permissions";
 import { OrderApproval } from "@/modules/approvals/Approvals";
@@ -118,6 +119,7 @@ export default function OrderDetail() {
         ]} />
       </Section> },
       { id: "shipment", title: "Shipment", size: "half", node: <OrderShipment o={o} shipment={shipment} lines={lines} locked={locked} /> },
+      { id: "costs", title: "Extra costs", size: "half", node: costs ? <OrderCosts o={o} lines={lines} shipment={shipment} /> : null },
       { id: "supplier_payments", title: "To pay suppliers", size: "half", node: costs ? <OrderSupplierPayments o={o} lines={lines} locked={locked} /> : null },
       { id: "lines", title: "Order lines", node: <Section title="Order lines" action={!locked && <span className="flex gap-2">{poButton}<LinkButton size="sm" variant="outline" to={`${base}/lines/new`}><Plus />Add line</LinkButton></span>}>
       <DataTable rows={lines} empty="No lines yet. Add the first product." exportName={`order-${o.pi_number ?? "draft"}-lines`}
@@ -130,6 +132,7 @@ export default function OrderDetail() {
           { key: "unit_cost", header: "Cost", align: "right", render: l => l.unit_cost == null ? <Pill tone="red">missing</Pill>
               : <div>{money(l.unit_cost, cur, 3)}<div className="text-xs text-gray-500">{SOURCE_LABEL[l.cost_source]}{l.cost_is_final ? " · final" : ""} · <Link to={`${base}/lines/${l.line_no}/cost`} className="underline hover:text-gray-900">why?</Link></div></div> },
           { key: "revenue", header: "Revenue", align: "right", render: l => money(l.revenue, cur) },
+          ...(lines.some(l => Number(l.extra_costs)) ? [{ key: "extra_costs", header: "Extra costs", align: "right" as const, render: (l: any) => Number(l.extra_costs) ? money(l.extra_costs, cur) : "–" }] : []),
           { key: "margin", header: "Margin", align: "right", render: l => <span className={Number(l.margin) < 0 ? "font-semibold text-rose-600" : ""}>{money(l.margin, cur)}<div className="text-xs text-gray-500">{marginPct(l.margin_pct, l.cost_known === false ? 1 : 0)}</div></span> },
           { key: "po", header: "Our PO", value: l => po[l.purchase_order_id]?.po_number, render: l => po[l.purchase_order_id] ? <Link to={poPath(po[l.purchase_order_id])} className="text-indigo-600 hover:underline">{po[l.purchase_order_id].po_number}</Link>
               : !locked && Number(l.qty) > 0 ? <Link to={`${base}/purchase-order`} className="text-xs font-medium text-amber-700 hover:underline">no PO · create</Link> : "–" },
@@ -137,7 +140,7 @@ export default function OrderDetail() {
           { key: "act", header: "", width: "3rem", render: l => locked || !can("delete_records") ? null : <Button size="icon" variant="ghost" aria-label={`Remove line ${l.line_no}`} className="h-7 w-7 text-gray-400 hover:text-rose-600"
               onClick={e => { e.stopPropagation(); setConfirm({ title: "Remove this line?", label: "Remove line", body: `${pName[l.product_id]}, ${qty(l.quantity)} pieces. It stays 30 days in Admin → Recycle bin. To keep the history, set "quantity cancelled" on the line instead.`,
                 go: () => run(() => db.remove("sales_order_lines", { id: l.id }), "Line removed") }); }}><Trash2 className="h-3.5 w-3.5" /></Button> },
-        ] as Col[]).filter(c => costs || !["unit_cost", "margin", "po"].includes(c.key))} />
+        ] as Col[]).filter(c => costs || !["unit_cost", "margin", "po", "extra_costs"].includes(c.key))} />
     </Section> },
       { id: "payments", title: "Payments and corrections", size: "half", node: <Section title="Payments and corrections" action={!locked && <span className="flex gap-2">
         <LinkButton size="sm" variant="outline" to={`${base}/correction`}>Correction</LinkButton>

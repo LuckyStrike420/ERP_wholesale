@@ -7,6 +7,7 @@
  * Example: purchase 5.00, sold at 10.00, margin shared 50% → cost 7.50. That cost is also what the PO to the supplier says.
  * (The database calculates this; the screens only show it.)
  */
+import { LandedCostList } from "@/modules/costs/LandedCosts";
 import { useState } from "react";
 import { Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ export function BatchDetail() {
   const batches = useRows("v_batch_stock"); const b = batches.rows.find(x => x.batch_number === batch);
   const stock = useRows(b ? "v_batch_item_stock" : null, { eq: { batch_id: b?.batch_id } }).rows;
   const raw = useRows(b ? "batch_items" : null, { eq: { batch_id: b?.batch_id } }).rows;
-  const sold = useRows("v_order_lines", { eq: { order_type: "EXW" } }).rows;
+  const sold = useRows("v_order_lines", { eq: { order_type: "EXW" } }).rows; const landed = useRows("v_batch_landed").rows;
   const suppliers = useRows("suppliers").rows; const products = useRows("products").rows;
   if (!b) return batches.loading ? <Loading /> : <NotFound what={`Batch ${batch}`} back={{ to: "/stock", label: "NL stock" }} />;
   const items = stock.map(s => ({ ...s, ...raw.find(r => r.id === s.batch_item_id), batch_item_id: s.batch_item_id }));
@@ -62,9 +63,11 @@ export function BatchDetail() {
           edit: { kind: "number", save: (i, v) => db.update("batch_items", { id: i.batch_item_id }, { cost_basis: v }) } },
         { key: "share", header: "Margin to supplier", align: "right", value: i => i.share_above_basis, render: i => Number(i.share_above_basis) > 0 ? pct(i.share_above_basis, 0) : <span className="text-gray-400">not shared</span>,
           edit: { kind: "number", get: pctField, save: (i, v) => db.update("batch_items", { id: i.batch_item_id }, { share_above_basis: v == null || Number(v) === 0 ? null : Number(v) / 100 }) } },
+        { key: "landed", header: "Landed costs / pc", align: "right", value: i => landed.find(x => x.batch_item_id === i.batch_item_id)?.per_unit_eur, render: i => { const x = landed.find(y => y.batch_item_id === i.batch_item_id); return x ? money(x.per_unit_eur, "EUR", 4) : <span className="text-gray-400">–</span>; } },
         { key: "rule", header: "Cost on an EXW sale", value: i => shareText(i.cost_basis, i.share_above_basis), render: i => <PriceCell i={i} /> },
       ]} />
     </Section>
+    <div className="mb-6"><LandedCostList batch={b.batch_id} back={batchPath(b)} title="Landed costs" sub="Freight, duties, storage … for this batch: spread over its products, then added per piece to every EXW sale from it and to the stock value." /></div>
     <Section title="Sold from this batch" sub="The cost per piece follows from the purchase price and margin share above; it is also the price on the PO to the supplier.">
       <DataTable rows={lines} rowTo={l => orderPath({ pi_number: l.pi_number, id: l.sales_order_id })} empty="Nothing sold from this batch yet" cols={[
         { key: "pi_number", header: "PI#", render: l => <span className="font-semibold text-gray-900">{l.pi_number ?? "draft"}</span> },

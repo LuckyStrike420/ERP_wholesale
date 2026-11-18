@@ -2,6 +2,8 @@
  * All pages and their URLs, in one place. Specific paths come before paths with a :parameter.
  * `section` decides which item in the side menu is highlighted.
  */
+import { StockCounts, StockCountSheet, StockMovements, StockValue } from "@/modules/stock/StockPages";
+import { LandedCostForm } from "@/modules/costs/LandedCosts";
 import { RecycleBin } from "@/modules/admin/RecycleBin";
 import { ValidationRules, ValidationRuleForm } from "@/modules/admin/ValidationRules";
 import { CustomersHealthPage } from "@/modules/insights/HealthPage";
@@ -43,6 +45,7 @@ export const ROUTES: Route[] = [
   r("/orders/:ref/documents/new", "orders", ShippingDocumentNew), r("/orders/:ref/documents/:doc", "orders", ShippingDocumentEdit), r("/orders/:ref/write-off", "orders", OrderWriteOff),
   r("/payments", "payments", ToReceive), r("/payments/suppliers", "payments", ToPay), r("/payments/ledger", "payments", Ledger),
   r("/payments/:id/void", "payments", VoidPayment),
+  r("/costs/new", "orders", LandedCostForm), r("/costs/:id", "orders", LandedCostForm),
   r("/approvals", "approvals", () => <Approvals tab="open" />), r("/approvals/all", "approvals", () => <Approvals tab="all" />),
   r("/admin/permissions", "admin", Permissions), r("/admin/recycle-bin", "admin", RecycleBin),
   r("/admin/validation-rules", "admin", ValidationRules), r("/admin/validation-rules/new", "admin", ValidationRuleForm), r("/admin/validation-rules/:id", "admin", ValidationRuleForm), r("/admin/approvals", "admin", ApprovalPolicies), r("/admin/approvals/new", "admin", ApprovalPolicyForm), r("/admin/approvals/:id", "admin", ApprovalPolicyForm),
@@ -62,6 +65,7 @@ export const ROUTES: Route[] = [
   r("/shipping", "shipping", Shipping), r("/shipping/new", "shipping", ShipmentForm), r("/shipping/:ref/edit", "shipping", ShipmentForm),
   r("/stock", "stock", Stock), r("/stock/batches/new", "stock", BatchForm), r("/stock/batches/:batch", "stock", BatchDetail), r("/stock/batches/:batch/edit", "stock", BatchForm),
   r("/stock/items/new", "stock", BatchItemForm), r("/stock/items/:id", "stock", BatchItemForm), r("/stock/corrections/new", "stock", StockCorrection),
+  r("/stock/movements", "stock", StockMovements), r("/stock/counts", "stock", StockCounts), r("/stock/counts/:id", "stock", StockCountSheet), r("/stock/value", "stock", StockValue),
   r("/reports", "reports", () => <Reports tab="customers" />), r("/reports/suppliers", "reports", () => <Reports tab="suppliers" />),
   r("/reports/monthly", "reports", () => <Reports tab="monthly" />), r("/reports/products", "reports", () => <Reports tab="products" />),
   r("/reports/cash-flow", "reports", () => <Reports tab="cash-flow" />), r("/reports/custom", "reports", () => <Reports tab="custom" />), r("/reports/forecast", "reports", () => <Reports tab="forecast" />),

@@ -1,6 +1,9 @@
 /**
  * Shipping and NL stock: /shipping, /shipping/new, /shipping/tiiu2819255/edit, /stock, /stock/batches/new, /stock/items/new, /stock/corrections/new
  */
+import { KIND_LABEL as STOCK_KIND, stockTabs } from "@/modules/stock/StockPages";
+import { LandedCostList } from "@/modules/costs/LandedCosts";
+import { useCan } from "@/app/permissions";
 import { COUNTRY_OPTIONS, place } from "@/app/countries";
 import { Plus } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
@@ -36,7 +39,7 @@ const shipFields: Field[] = [
 
 export function ShipmentForm() {
   const { ref } = useParams(); const { db } = useApp(); const q = useQuery();
-  const forOrder = q.get("order"), forPo = q.get("po"), back = q.get("back");
+  const forOrder = q.get("order"), forPo = q.get("po"), back = q.get("back"); const useCanCosts = useCan()("see_costs");
   const ships = useRows("v_shipments"); const orders = useRows("v_orders", { order: [["pi_number", "desc"]] }).rows;
   const pos = useRows("v_purchase_orders", { order: [["po_number", "desc"]] }).rows; const links = useRows("shipment_orders").rows;
   const prodQ = useRows("products"); const linesQ = useRows(forOrder ? "sales_order_lines" : null, { eq: { sales_order_id: forOrder } });
@@ -60,6 +63,7 @@ export function ShipmentForm() {
   return <FormPage title={row ? `Shipment ${row.container_number ?? row.pi_numbers ?? ""}` : "New shipment"} back={back ? { to: back, label: "Back to the order" } : { to: "/shipping", label: "Shipping" }} fields={fields}
     initial={row ?? { sales_order_id: forOrder ?? "", purchase_order_id: forPo ?? "", port_loading: pol?.pol_city ?? "", port_loading_country: pol?.pol_country ?? "" }}
     sub={row ? `For PI ${row.pi_numbers ?? "–"} · PO ${row.po_numbers ?? "–"}` : undefined}
+    aside={row && useCanCosts && <LandedCostList shipment={row.id} back={`${shipmentPath(row, "/edit")}${back ? `?back=${encodeURIComponent(back)}` : ""}`} title="Shipment costs" sub="Freight, duties, forwarder … spread over the orders on this shipment." />}
     onSubmit={async v => {
       const { sales_order_id, purchase_order_id, ...ship } = v;
       if (row) { await db.update("shipments", { id: row.id }, ship); return; }
@@ -80,6 +84,7 @@ export function Stock() {
     <PageHeader title="NL stock" sub="Shipments the supplier places in our warehouse. An EXW sale from a batch costs the purchase price, plus the supplier's share of the margin when that is shared. Click a batch to change it.">
       <LinkButton to="/stock/batches/new"><Plus />New batch</LinkButton>
       <LinkButton variant="outline" to="/stock/corrections/new">Stock correction</LinkButton></PageHeader>
+    {stockTabs}
     <div className="grid gap-6 xl:grid-cols-2">
       <Section title="Per batch and product" className="xl:col-span-2">
         <DataTable rows={items} search exportName="stock-per-batch" empty="No stock batches yet" rowTo={i => batchPath(i)} cols={[
@@ -92,11 +97,15 @@ export function Stock() {
           { key: "sold", header: "Sold", align: "right", render: i => qty(i.sold) }, { key: "stock", header: "In stock", align: "right", render: i => <b>{neg(i.stock)}</b> },
           { key: "sold_without_po", header: "Sold, no PO yet", align: "right", render: i => Number(i.sold_without_po) > 0 ? <span className="font-semibold text-amber-600">{qty(i.sold_without_po)}</span> : "–" }]} />
       </Section>
-      <Section title="Per product"><DataTable dense rows={perProduct.filter(p => Number(p.received_and_adjusted) || Number(p.sold_from_stock))} empty="No stock" cols={[{ key: "product_name", header: "Product" },
+      <Section title="Per product" sub="Set a minimum per product (pencil); below it the product shows on the dashboard."><DataTable dense rows={perProduct.filter(p => Number(p.received_and_adjusted) || Number(p.sold_from_stock) || p.min_stock != null).map(p => ({ ...p, id: p.product_id }))} empty="No stock" cols={[{ key: "product_name", header: "Product" },
         { key: "received_and_adjusted", header: "Received + corrections", align: "right", render: p => qty(p.received_and_adjusted) }, { key: "sold_from_stock", header: "Sold", align: "right", render: p => qty(p.sold_from_stock) },
-        { key: "stock", header: "In stock", align: "right", render: p => <b>{neg(p.stock)}</b> }]} /></Section>
+        { key: "stock", header: "In stock", align: "right", render: p => <span className="inline-flex items-center gap-1.5"><b>{neg(p.stock)}</b>{p.below_min && <Pill tone="red">low</Pill>}</span> },
+        { key: "min_stock", header: "Minimum", align: "right", render: p => p.min_stock == null ? <span className="text-gray-400">–</span> : qty(p.min_stock),
+          edit: { kind: "number", save: (p, v) => db.update("products", { id: p.product_id }, { min_stock: v == null || v === "" ? null : Math.max(0, Math.round(Number(v))) }) } },
+        { key: "sold_90d", header: "Sold 90 days", align: "right", render: p => qty(p.sold_90d) },
+        { key: "cover", header: "Weeks left", align: "right", value: p => Number(p.sold_90d) ? Number(p.stock) / (Number(p.sold_90d) / 13) : null, render: p => Number(p.sold_90d) ? `${Math.max(0, Math.floor(Number(p.stock) / (Number(p.sold_90d) / 13)))}` : "–" }]} /></Section>
       <Section title="Movements"><DataTable dense rows={moves} empty="No movements" cols={[{ key: "movement_date", header: "Date", render: m => date(m.movement_date) },
-        { key: "item", header: "Batch · product", value: m => itemLabel[m.batch_item_id], render: m => itemLabel[m.batch_item_id] }, { key: "kind", header: "Type", render: m => ({ receipt: "Received", sale: "Sale" } as any)[m.kind] ?? m.kind },
+        { key: "item", header: "Batch · product", value: m => itemLabel[m.batch_item_id], render: m => itemLabel[m.batch_item_id] }, { key: "kind", header: "Type", render: m => STOCK_KIND[m.kind] ?? m.kind },
         { key: "reference", header: "Ref" }, { key: "quantity", header: "Qty", align: "right", render: m => neg(m.quantity) }]} /></Section>
     </div>
   </>;
@@ -109,7 +118,7 @@ export function StockCorrection() {
   const back = inBatch.length ? { to: batchPath(inBatch[0]), label: `Batch ${inBatch[0].batch_number}` } : { to: "/stock", label: "NL stock" };
   return <FormPage title="Stock correction" sub="Count, damage or return. Less stock is a negative number." back={back} done={back.to} initial={{ adjustment_date: today(), batch_item_id: inBatch.length === 1 ? inBatch[0].batch_item_id : undefined }}
     fields={[{ name: "batch_item_id", label: "Batch · product", type: "select", required: true, options: items.rows.map(i => ({ value: i.batch_item_id, label: `${i.batch_number} · ${i.product_name} (${i.stock} in stock)` })) },
-      { name: "adjustment_date", label: "Date", type: "date", span: 1 }, { name: "kind", label: "Kind", type: "select", span: 1, options: kinds.map(k => ({ value: k.code, label: k.code })) },
+      { name: "adjustment_date", label: "Date", type: "date", span: 1 }, { name: "kind", label: "Kind", type: "select", span: 1, options: kinds.map(k => ({ value: k.code, label: STOCK_KIND[k.code] ?? k.code })) },
       { name: "quantity", label: "Quantity (+/-)", type: "number", required: true, span: 1 }, { name: "reference", label: "Reference", span: 1 }, { name: "notes", label: "Note", type: "textarea" }]}
     onSubmit={async v => { await db.insert("stock_adjustments", v); }} />;
 }

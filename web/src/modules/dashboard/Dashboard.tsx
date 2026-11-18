@@ -4,6 +4,7 @@
  * Saved reports marked "Show on the dashboard" are added as widgets too.
  * The filter (customer, order type, year) sits in the address (?customer=…&type=…&year=…) and reaches every widget.
  */
+import { LowStockWidget } from "@/modules/stock/StockPages";
 import { useMemo, useState, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Plus, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { X } from "lucide-react";
 const BUILT_IN: Widget[] = [...BASE,
   { id: "targets", title: "Targets", description: "This month, year to date and the year against the targets", span: "third", Component: p => <TargetsWidget year={p.year} /> },
   { id: "health", title: "Customer health", description: "Customers to watch: paying late, ordering less, gone quiet", span: "third", Component: p => <HealthWidget customer={p.customer} /> },
+  { id: "lowstock", title: "Low stock (NL)", description: "Products under their minimum stock, with weeks left", span: "third", Component: () => <LowStockWidget /> },
   { id: "reorders", title: "Reorders due", description: "Customers expected to order again, late ones first", span: "third", Component: p => <ReordersWidget customer={p.customer} /> },
 ];
 import { ReportWidget } from "@/modules/reports/Custom";
