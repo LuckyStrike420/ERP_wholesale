@@ -10,6 +10,7 @@ import { date, money, pct, qty, today } from "@/app/format";
 import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
 import { DocumentsSection } from "@/modules/documents/Documents";
 import { FavoriteStar, useRecord } from "@/app/Favorites";
+import { BlockGrid, CustomizeButton, useLayout } from "@/app/Layout";
 
 function usePO() {
   const { po } = useParams();
@@ -71,6 +72,7 @@ export function PurchaseOrderDetail() {
   const products = useRows("products").rows; const suppliers = useRows("suppliers").rows;
   const rec = p ? { type: "po" as const, id: p.id, label: `PO ${p.po_number}`, path: poPath(p), sub: p.supplier_name } : null;
   useRecord(rec);
+  const lay = useLayout("purchase_order");
   if (!p) return loading ? <Loading what="Loading PO…" /> : <NotFound what={`PO ${no}`} back={{ to: "/purchasing", label: "All purchase orders" }} />;
   const cur = p.currency; const pName = Object.fromEntries(products.map(x => [x.id, x.name])); const base = poPath(p);
   const supplier = suppliers.find(s => s.id === p.supplier_id);
@@ -82,41 +84,40 @@ export function PurchaseOrderDetail() {
       <LinkButton variant="outline" to={`${base}/invoice`}>{inv ? "Edit supplier invoice" : "Supplier invoice received"}</LinkButton>
       <LinkButton variant="outline" to={`${base}/pdf`}><FileText />PO (PDF)</LinkButton>
       <LinkButton variant="outline" to={`${base}/edit`}><Pencil />Edit</LinkButton>
+      <CustomizeButton lay={lay} />
     </PageHeader>
-    <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <BlockGrid lay={lay} blocks={[
+      { id: "stats", title: "Key figures", node: <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Stat label="To pay" value={money(p.payable, cur)} hint={p.invoice_amount == null ? "expected, no invoice yet" : `invoice ${p.invoice_number ?? ""}`} />
       <Stat label="Paid" value={money(p.paid, cur)} />
       <Stat label="Outstanding" value={money(p.outstanding, cur)} tone={Number(p.overdue_amount) > 0 ? "bad" : Number(p.outstanding) > 0.01 ? "warn" : "good"}
         hint={p.balance_due_date || p.deposit_due_date ? `due ${date(p.deposit_due_date ?? p.balance_due_date)}` : "no due date set"} />
       <Stat label="Invoice difference" value={Math.abs(Number(p.invoice_difference ?? 0)) > 0.01 ? money(p.invoice_difference, cur) : "–"} tone={Math.abs(Number(p.invoice_difference ?? 0)) > 0.01 ? "warn" : undefined} hint="goes into the margin" />
-    </div>
-    <div className="mb-6 grid gap-6 lg:grid-cols-2">
-      <Section title="Payment schedule" action={<Link to={`${base}/edit`} className="text-xs font-medium text-indigo-600 hover:underline">Set due dates</Link>}><KV items={[
+    </div> },
+      { id: "schedule", title: "Payment schedule", size: "half", node: <Section title="Payment schedule" action={<Link to={`${base}/edit`} className="text-xs font-medium text-indigo-600 hover:underline">Set due dates</Link>}><KV items={[
         [`Deposit ${pct(p.deposit_pct, 0)}`, <>{money(p.deposit_due, cur)} {Number(p.deposit_due) > 0 && (Number(p.deposit_outstanding) <= 0.01 ? <Pill tone="green">paid</Pill> : <Pill tone="amber">{money(p.deposit_outstanding, cur)} open</Pill>)}</>],
         ["Deposit due", p.deposit_due_date ? date(p.deposit_due_date) : <span className="text-gray-400">not set</span>],
         ["Balance", money(Number(p.payable) - Number(p.deposit_due), cur)],
-        ["Balance due", p.balance_due_date ? date(p.balance_due_date) : <span className="text-gray-400">not set</span>]]} /></Section>
-      <Section title="PO"><KV items={[["PO date", date(p.po_date)], ["Cost prices", inv ? "final (supplier invoice entered)" : "calculated, final at supplier invoice"], ["Note", p.notes ?? "–"]]} /></Section>
-    </div>
-    <Section title="Order lines on this PO" className="mb-6">
+        ["Balance due", p.balance_due_date ? date(p.balance_due_date) : <span className="text-gray-400">not set</span>]]} /></Section> },
+      { id: "details", title: "PO details", size: "half", node: <Section title="PO"><KV items={[["PO date", date(p.po_date)], ["Cost prices", inv ? "final (supplier invoice entered)" : "calculated, final at supplier invoice"], ["Note", p.notes ?? "–"]]} /></Section> },
+      { id: "lines", title: "Order lines on this PO", node: <Section title="Order lines on this PO">
       <DataTable rows={lines} empty="No order lines linked yet. Link a line by choosing this PO on the order." rowTo={l => orderPath({ pi_number: l.pi_number, id: l.sales_order_id })} cols={[
         { key: "pi_number", header: "PI#", render: l => <span className="font-semibold text-gray-900">{l.pi_number ?? "draft"}</span> }, { key: "product", header: "Product", value: l => pName[l.product_id], render: l => <div>{pName[l.product_id]}<BatchPriceNote l={l} items={batchRows} stock={batchStock} /></div> },
         { key: "qty", header: "Qty", align: "right", render: l => qty(l.qty) }, { key: "unit_cost", header: "Cost per piece", align: "right", render: l => money(l.unit_cost, cur, 3) },
         { key: "purchase_value", header: "Purchase value", align: "right", render: l => money(l.purchase_value, cur) },
         { key: "invoice_variance", header: "Invoice difference", align: "right", render: l => Number(l.invoice_variance) ? money(l.invoice_variance, cur) : "–" }]} />
-    </Section>
-    <Section title="Payments" action={<LinkButton size="sm" variant="outline" to={`${base}/write-off`}>Write-off</LinkButton>}>
+    </Section> },
+      { id: "payments", title: "Payments", node: <Section title="Payments" action={<LinkButton size="sm" variant="outline" to={`${base}/write-off`}>Write-off</LinkButton>}>
       <DataTable dense empty="No payments registered yet" rows={[
           ...allocs.map(a => ({ id: a.id, d: a.payment_date, what: a.voided_at ? "Payment (voided)" : "Payment", ref: a.reference, amount: a.amount, voided: !!a.voided_at, pid: a.payment_id })),
           ...writeOffs.map(a => ({ id: a.id, d: a.write_off_date, what: "Write-off", ref: a.reason, amount: a.amount }))]}
         cols={[{ key: "d", header: "Date", render: r => date(r.d) }, { key: "what", header: "Type" }, { key: "ref", header: "Reference / reason" },
           { key: "amount", header: "Amount", align: "right", render: (r: any) => <span className={r.voided ? "text-gray-400 line-through" : ""}>{money(r.amount, cur)}</span> },
           { key: "x", header: "", render: (r: any) => r.pid && !r.voided ? <Link to={`/payments/${String(r.pid).slice(0, 8)}/void?back=${encodeURIComponent(base)}`} className="text-xs text-rose-600 hover:underline">void</Link> : null }]} />
-    </Section>
-    <div className="mt-6 grid gap-6 lg:grid-cols-2">
-      <TasksSection eq={{ purchase_order_id: p.id }} hide={["po", "supplier"]} newLink={newTaskPath({ po: p.po_number, back: base })} />
-      <DocumentsSection entity="purchase_orders" id={p.id} />
-    </div>
+    </Section> },
+      { id: "tasks", title: "Tasks", size: "half", node: <TasksSection eq={{ purchase_order_id: p.id }} hide={["po", "supplier"]} newLink={newTaskPath({ po: p.po_number, back: base })} /> },
+      { id: "documents", title: "Documents", size: "half", node: <DocumentsSection entity="purchase_orders" id={p.id} /> },
+    ]} />
   </>;
 }
 

@@ -11,6 +11,7 @@ import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
 import { DocumentsSection } from "@/modules/documents/Documents";
 import { ContactsSection, NotesSection } from "./Contacts";
 import { FavoriteStar, useRecord } from "@/app/Favorites";
+import { BlockGrid, CustomizeButton, useLayout } from "@/app/Layout";
 import { findSimilar } from "@/app/duplicates";
 import type { ReactNode } from "react";
 
@@ -50,6 +51,7 @@ export function CustomerDetail() {
   const orders = useRows(c ? "v_orders" : null, { eq: { customer_id: c?.id }, order: [["po_date", "desc"]] }).rows;
   const rec = c ? { type: "customer" as const, id: c.id, label: c.name, path: customerPath(c), sub: c.country ?? undefined } : null;
   useRecord(rec);
+  const lay = useLayout("customer");
   if (!c) return loading ? <Loading /> : <NotFound what="Customer" back={{ to: "/customers", label: "All customers" }} />;
   const cur = [c.eur, c.usd].filter(Boolean);
   const last = orders.find(o => o.status !== "cancelled");
@@ -57,31 +59,29 @@ export function CustomerDetail() {
   return <>
     <PageHeader back={{ to: "/customers", label: "Customers" }} title={<span className="flex items-center gap-2">{c.name}{rec && <FavoriteStar r={rec} />}</span>} sub={[c.country, c.contact_name, c.email].filter(Boolean).join(" · ") || undefined}>
       <LinkButton to={`/orders/new`} variant="outline"><Plus />New order</LinkButton>
-      <LinkButton to={customerPath(c, "/edit")} variant="outline"><Pencil />Edit</LinkButton></PageHeader>
-    <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <LinkButton to={customerPath(c, "/edit")} variant="outline"><Pencil />Edit</LinkButton><CustomizeButton lay={lay} /></PageHeader>
+    <BlockGrid lay={lay} blocks={[
+      { id: "stats", title: "Key figures", node: <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       {cur.map(x => <Stat key={x.currency} label={`Open ${x.currency}`} value={money(x.outstanding, x.currency)} tone={Number(x.overdue) > 0 ? "bad" : undefined} hint={Number(x.overdue) > 0 ? `${money(x.overdue, x.currency)} overdue` : `${x.open_orders} open order(s)`} />)}
       {!cur.length && <Stat label="Open" value="–" hint="no orders yet" />}
       <Stat label="Last order" value={last ? <Link to={orderPath(last)} className="hover:text-indigo-600">{last.pi_number ? `PI ${last.pi_number}` : "draft"}</Link> : "–"} hint={last ? `${date(last.po_date)} · ${orders.length} order(s) in total` : undefined} />
       <Stat label="Last payment" value={lastPay ? date(lastPay) : "–"} hint={lastPay ? "received" : "nothing received yet"} />
-    </div>
-    <div className="mb-6 grid gap-6 lg:grid-cols-3">
-      <ContactsSection party="customer" p={c} />
-      <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)]]} /></Section>
-      <Section title="Details"><KV items={[["Address", c.address ? <span className="whitespace-pre-line">{c.address}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section>
-    </div>
-    <Section title="Orders">
+    </div> },
+      { id: "contacts", title: "Contacts", size: "half", node: <ContactsSection party="customer" p={c} /> },
+      { id: "terms", title: "Payment terms", size: "half", node: <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)]]} /></Section> },
+      { id: "details", title: "Details", size: "half", node: <Section title="Details"><KV items={[["Address", c.address ? <span className="whitespace-pre-line">{c.address}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section> },
+      { id: "notes", title: "Notes", size: "half", node: <NotesSection party="customer" p={c} /> },
+      { id: "orders", title: "Orders", node: <Section title="Orders">
       <DataTable rows={orders} rowTo={o => orderPath(o)} empty="No orders yet" cols={[
         { key: "pi_number", header: "PI#", render: o => <span className="font-semibold text-gray-900">{o.pi_number ?? "draft"}</span> }, { key: "order_type", header: "Type" },
         { key: "po_date", header: "PO date", render: o => date(o.po_date) }, { key: "status", header: "Status", render: o => <StatusPill status={o.status} /> },
         { key: "total_receivable", header: "Total", align: "right", render: o => money(o.total_receivable, o.currency) },
         { key: "outstanding", header: "Outstanding", align: "right", render: o => money(o.outstanding, o.currency) },
         { key: "payment_status", header: "Payment", render: o => <PaymentPill status={o.payment_status} /> }]} />
-    </Section>
-    <div className="mt-6 grid gap-6 lg:grid-cols-2">
-      <NotesSection party="customer" p={c} />
-      <div className="space-y-6"><TasksSection eq={{ customer_id: c.id }} hide={["customer"]} newLink={newTaskPath({ customer: slug, back: customerPath(c) })} />
-        <DocumentsSection entity="customers" id={c.id} /></div>
-    </div>
+    </Section> },
+      { id: "tasks", title: "Tasks", size: "half", node: <TasksSection eq={{ customer_id: c.id }} hide={["customer"]} newLink={newTaskPath({ customer: slug, back: customerPath(c) })} /> },
+      { id: "documents", title: "Documents", size: "half", node: <DocumentsSection entity="customers" id={c.id} /> },
+    ]} />
   </>;
 }
 

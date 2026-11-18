@@ -9,6 +9,7 @@ import { date, money, marginPct, pct, qty, SOURCE_LABEL, STATUS_LABEL, STATUS_OR
 import { useOrder } from "./data";
 import { OrderTimeline } from "./Timeline";
 import { OrderPath } from "./OrderPath";
+import { BlockGrid, CustomizeButton, useLayout } from "@/app/Layout";
 import { FavoriteStar, useRecord } from "@/app/Favorites";
 import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
 import { DocumentsSection } from "@/modules/documents/Documents";
@@ -39,6 +40,7 @@ export default function OrderDetail() {
 
   const rec = o ? { type: "order" as const, id: o.id, label: o.pi_number ? `PI ${o.pi_number}` : "Draft order", path: orderPath(o), sub: o.customer_name } : null;
   useRecord(rec);
+  const lay = useLayout("order");
   if (!o) return loading ? <Loading what="Loading order…" /> : <NotFound what={`Order ${ref}`} back={{ to: "/orders", label: "All orders" }} />;
   const cur = o.currency; const locked = ["completed", "cancelled"].includes(o.status);
   const base = orderPath(o);
@@ -65,30 +67,28 @@ export default function OrderDetail() {
       {o.pi_number && <LinkButton to={`${base}/pi`} variant="outline"><FileText />PI (PDF)</LinkButton>}
       {o.invoice_number && <LinkButton to={`${base}/commercial-invoice`} variant="outline"><FileText />Invoice (PDF)</LinkButton>}
       {o.pi_number && <LinkButton to={`/orders/new?from=${encodeURIComponent(o.pi_number)}`} variant="outline"><Copy />Repeat order</LinkButton>}
+      <CustomizeButton lay={lay} />
       {!locked && o.status_rank < 60 && <Button variant="outline" className="text-rose-600" onClick={() => setConfirm({ title: "Cancel this order?", label: "Cancel order",
         body: "The order leaves revenue and open amounts. Payments already received stay visible as customer credit. This cannot be undone.",
         go: () => run(() => db.update("sales_orders", { id: o.id }, { status: "cancelled" }), "Order cancelled") })}><Ban className="h-4 w-4" />Cancel order</Button>}
     </PageHeader>
 
-    <OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
-    {flags.length > 0 && <div className="-mt-3 mb-6 flex flex-wrap gap-2">{flags.map(f => <span key={f.rule_id} title={`Rule: ${f.rule_name}`} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800"><Flag className="h-3.5 w-3.5" />{f.flag_text}</span>)}</div>}
-
-    <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <BlockGrid lay={lay} blocks={[
+      { id: "path", title: "Status path", node: <div className="space-y-3"><OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
+        {flags.length > 0 && <div className="-mt-3 flex flex-wrap gap-2">{flags.map(f => <span key={f.rule_id} title={`Rule: ${f.rule_name}`} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800"><Flag className="h-3.5 w-3.5" />{f.flag_text}</span>)}</div>}</div> },
+      { id: "stats", title: "Key figures", node: <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Stat label="Total to receive" value={money(o.total_receivable, cur)} hint={Number(o.adjustments) ? `incl. corrections ${money(o.adjustments, cur)}` : `${o.line_count} line${o.line_count === 1 ? "" : "s"}`} />
       <Stat label="Received" value={money(o.paid, cur)} hint={Number(o.written_off) ? `written off ${money(o.written_off, cur)}` : o.last_payment_date ? `last on ${date(o.last_payment_date)}` : "nothing yet"} />
       <Stat label="Outstanding" value={money(o.outstanding, cur)} tone={late ? "bad" : Number(o.outstanding) > 0.01 ? "warn" : "good"}
         hint={late ? `${money(o.overdue_amount, cur)} overdue, ${o.days_late} days` : o.reminder_due ? "EXW reminder due" : Number(o.outstanding) > 0.01 ? (o.balance_due_date || o.deposit_due_date ? `due ${date(Number(o.deposit_outstanding) > 0.01 && o.deposit_due_date ? o.deposit_due_date : o.balance_due_date)}` : "no due date set") : "fully paid"} />
       <Stat label="Margin" value={money(o.margin, cur)} tone={Number(o.cost_missing_lines) > 0 ? "warn" : undefined}
         hint={Number(o.cost_missing_lines) > 0 ? `incomplete: ${o.cost_missing_lines} line(s) without cost price` : marginPct(o.margin_pct, 0)} />
-    </div>
-
-    {mine.length > 0 && <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
+    </div> },
+      { id: "actions", title: "Next actions", node: mine.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
       <div className="mb-2 flex items-center text-sm font-semibold text-amber-900"><AlertTriangle className="mr-1.5 h-4 w-4" />Next actions</div>
       <ul className="space-y-1.5 text-sm text-amber-950">{mine.map((a, i) => <li key={i} className="flex items-center gap-2"><SeverityPill s={a.severity} />{a.message}
-        {a.code === "stock_sale_without_po" && !locked && <Link to={`${base}/purchase-order`} className="ml-1 font-medium text-indigo-600 hover:underline">Create PO</Link>}</li>)}</ul></div>}
-
-    <div className="mb-6 grid gap-6 lg:grid-cols-2">
-      <Section title="Payment schedule" sub={term ? term.name : "No payment term on this order"}
+        {a.code === "stock_sale_without_po" && !locked && <Link to={`${base}/purchase-order`} className="ml-1 font-medium text-indigo-600 hover:underline">Create PO</Link>}</li>)}</ul></div> },
+      { id: "schedule", title: "Payment schedule", size: "half", node: <Section title="Payment schedule" sub={term ? term.name : "No payment term on this order"}
         action={!locked && <Link to={`${base}/edit`} className="text-xs font-medium text-indigo-600 hover:underline">Change term or dates</Link>}>
         <KV items={[
           [`Deposit ${pct(o.deposit_pct, 0)}`, <>{money(o.deposit_due, cur)} {Number(o.deposit_due) > 0 && (Number(o.deposit_outstanding) <= 0.01 ? <Pill tone="green">received</Pill> : <Pill tone="amber">{money(o.deposit_outstanding, cur)} open</Pill>)}</>],
@@ -101,18 +101,16 @@ export default function OrderDetail() {
         {open && !["draft", "cancelled"].includes(o.status) && <div className="border-t border-gray-100 px-5 py-2.5">
           <Link to={newTaskPath({ order: o.pi_number ?? `draft-${o.id.slice(0, 8)}`, title: `Chase ${chase.what} ${o.pi_number ? `PI ${o.pi_number} ` : ""}(${o.customer_name})`, due: chase.due, back: base })}
             className="text-xs font-medium text-indigo-600 hover:underline">+ Reminder to chase the {chase.what}</Link></div>}
-      </Section>
-      <Section title="Order">
+      </Section> },
+      { id: "details", title: "Order details", size: "half", node: <Section title="Order">
         <KV items={[
           ["PO date", date(o.po_date)], ["PI sent", date(o.pi_date)],
           ["Invoice", o.invoice_number ? `${o.invoice_number} · ${date(o.invoice_date)}` : locked ? "–" : <Link to={`${base}/invoice`} className="text-indigo-600 hover:underline">Register invoice</Link>],
           ["Shipment", shipment ? <Link to={shipmentPath(shipment, "/edit")} className="text-indigo-600 hover:underline">{SHIP_LABEL[shipment.status]}{shipment.eta ? ` · ETA ${date(shipment.eta)}` : ""}</Link> : <span className="text-gray-400">none yet</span>],
           ["Note", o.notes ?? "–"],
         ]} />
-      </Section>
-    </div>
-
-    <Section title="Order lines" className="mb-6" action={!locked && <span className="flex gap-2">{poButton}<LinkButton size="sm" variant="outline" to={`${base}/lines/new`}><Plus />Add line</LinkButton></span>}>
+      </Section> },
+      { id: "lines", title: "Order lines", node: <Section title="Order lines" action={!locked && <span className="flex gap-2">{poButton}<LinkButton size="sm" variant="outline" to={`${base}/lines/new`}><Plus />Add line</LinkButton></span>}>
       <DataTable rows={lines} empty="No lines yet. Add the first product." exportName={`order-${o.pi_number ?? "draft"}-lines`}
         rowTo={locked ? undefined : l => `${base}/lines/${l.line_no}`}
         cols={[
@@ -131,10 +129,8 @@ export default function OrderDetail() {
               onClick={e => { e.stopPropagation(); setConfirm({ title: "Remove this line?", label: "Remove line", body: `${pName[l.product_id]}, ${qty(l.quantity)} pieces. To keep the history, set "quantity cancelled" on the line instead.`,
                 go: () => run(() => db.remove("sales_order_lines", { id: l.id }), "Line removed") }); }}><Trash2 className="h-3.5 w-3.5" /></Button> },
         ]} />
-    </Section>
-
-    <div className="mb-6 grid gap-6 lg:grid-cols-2">
-      <Section title="Payments and corrections" action={!locked && <span className="flex gap-2">
+    </Section> },
+      { id: "payments", title: "Payments and corrections", size: "half", node: <Section title="Payments and corrections" action={!locked && <span className="flex gap-2">
         <LinkButton size="sm" variant="outline" to={`${base}/correction`}>Correction</LinkButton>
         <LinkButton size="sm" variant="outline" to={`${base}/write-off`}>Write-off</LinkButton></span>}>
         <DataTable dense empty="No payments registered yet" rows={[
@@ -145,13 +141,12 @@ export default function OrderDetail() {
           cols={[{ key: "d", header: "Date", render: r => date(r.d) }, { key: "what", header: "Type" }, { key: "ref", header: "Reference / reason" },
             { key: "amount", header: "Amount", align: "right", render: (r: any) => <span className={r.voided ? "text-gray-400 line-through" : ""}>{money(r.amount, cur)}</span> },
             { key: "x", header: "", render: (r: any) => r.pid && !r.voided ? <Link to={`/payments/${String(r.pid).slice(0, 8)}/void?back=${encodeURIComponent(base)}`} className="text-xs text-rose-600 hover:underline">void</Link> : null }]} />
-      </Section>
-      <TasksSection eq={{ sales_order_id: o.id }} hide={["order", "customer"]} newLink={newTaskPath({ order: o.pi_number ?? `draft-${o.id.slice(0, 8)}`, back: base })} />
-    </div>
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_26rem]">
-      <OrderTimeline o={o} />
-      <div className="space-y-6 self-start"><ShippingDocumentsSection o={o} /><DocumentsSection entity="sales_orders" id={o.id} /></div>
-    </div>
+      </Section> },
+      { id: "tasks", title: "Tasks", size: "half", node: <TasksSection eq={{ sales_order_id: o.id }} hide={["order", "customer"]} newLink={newTaskPath({ order: o.pi_number ?? `draft-${o.id.slice(0, 8)}`, back: base })} /> },
+      { id: "timeline", title: "Timeline", size: "half", node: <OrderTimeline o={o} /> },
+      { id: "shipping_docs", title: "Shipping documents", size: "half", node: <ShippingDocumentsSection o={o} /> },
+      { id: "documents", title: "Documents", size: "half", node: <DocumentsSection entity="sales_orders" id={o.id} /> },
+    ]} />
     <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)} danger title={confirm?.title ?? ""} body={confirm?.body} confirmLabel={confirm?.label} onConfirm={() => confirm?.go()} />
   </>;
 }
