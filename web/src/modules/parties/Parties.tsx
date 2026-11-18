@@ -1,6 +1,7 @@
 /**
  * Customers and suppliers: /customers, /customers/new, /customers/jml, /customers/jml/edit (same for /suppliers).
  */
+import { addressFields } from "@/app/countries";
 import { Pencil, Plus } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
 import { Link, useParams } from "@/app/router";
@@ -69,7 +70,7 @@ export function CustomerDetail() {
     </div> },
       { id: "contacts", title: "Contacts", size: "half", node: <ContactsSection party="customer" p={c} /> },
       { id: "terms", title: "Payment terms", size: "half", node: <Section title="Payment terms" action={<Link to={customerPath(c, "/edit")} className="text-xs font-medium text-indigo-600 hover:underline">Change</Link>}><KV items={[["EXW", termLine(c.exw)], ["FOB", termLine(c.fob)]]} /></Section> },
-      { id: "details", title: "Details", size: "half", node: <Section title="Details"><KV items={[["Address", c.address ? <span className="whitespace-pre-line">{c.address}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section> },
+      { id: "details", title: "Details", size: "half", node: <Section title="Details"><KV items={[["Address", c.address || c.country ? <span className="whitespace-pre-line">{[c.address, c.country].filter(Boolean).join("\n")}</span> : "–"], ["VAT number", c.vat_number ?? "–"], ["E-mail", c.email ?? "–"], ["Note", c.notes ?? "–"]]} /></Section> },
       { id: "notes", title: "Notes", size: "half", node: <NotesSection party="customer" p={c} /> },
       { id: "orders", title: "Orders", node: <Section title="Orders">
       <DataTable rows={orders} rowTo={o => orderPath(o)} empty="No orders yet" cols={[
@@ -85,9 +86,9 @@ export function CustomerDetail() {
   </>;
 }
 
-const customerFields: Field[] = [{ name: "name", label: "Customer", required: true }, { name: "country", label: "Country", span: 1 }, { name: "vat_number", label: "VAT number", span: 1 },
+const customerFields: Field[] = [{ name: "name", label: "Customer", required: true }, { name: "vat_number", label: "VAT number", span: 1 },
   { name: "contact_name", label: "Contact", span: 1 }, { name: "email", label: "E-mail", span: 1 },
-  { name: "address", label: "Address (on the PI)", type: "textarea" },
+  ...addressFields("Address (on the PI)"),
   { name: "notes", label: "Note", type: "textarea", section: "Note" }];
 
 export function CustomerForm() {
@@ -159,7 +160,7 @@ export function SupplierDetail() {
     </div>
     <div className="mb-6 grid gap-6 lg:grid-cols-2">
       <ContactsSection party="supplier" p={s} />
-      <Section title="Terms"><KV items={[["EXW", sterms(s.exw)], ["FOB", sterms(s.fob)], ["Address", s.address ? <span className="whitespace-pre-line">{s.address}</span> : "–"], ["Note", s.notes ?? "–"]]} /></Section>
+      <Section title="Terms"><KV items={[["EXW", sterms(s.exw)], ["FOB", sterms(s.fob)], ["Address", s.address || s.country ? <span className="whitespace-pre-line">{[s.address, s.country].filter(Boolean).join("\n")}</span> : "–"], ["Note", s.notes ?? "–"]]} /></Section>
     </div>
     <Section title="Purchase orders">
       <DataTable rows={pos} rowTo={p => poPath(p)} empty="No purchase orders yet" cols={[
@@ -181,8 +182,8 @@ export function SupplierForm() {
   if (slug && !row) return loading ? <Loading /> : <NotFound what="Supplier" back={{ to: "/suppliers", label: "All suppliers" }} />;
   const cur = [{ value: "EUR", label: "EUR" }, { value: "USD", label: "USD" }];
   return <FormPage title={row ? `Edit ${row.name}` : "New supplier"} back={row ? { to: supplierPath(row), label: row.name } : { to: "/suppliers", label: "Suppliers" }}
-    fields={[{ name: "name", label: "Supplier", required: true }, { name: "country", label: "Country", span: 1 }, { name: "contact_name", label: "Contact", span: 1 }, { name: "email", label: "E-mail" },
-      { name: "address", label: "Address (on the PO)", type: "textarea" },
+    fields={[{ name: "name", label: "Supplier", required: true }, { name: "contact_name", label: "Contact", span: 1 }, { name: "email", label: "E-mail", span: 1 },
+      ...addressFields("Address (on the PO)"),
       { name: "exw_currency", label: "EXW currency", type: "select", options: cur, span: 1, section: "Terms" }, { name: "exw_deposit", label: "EXW deposit %", type: "percent", span: 1, section: "Terms" },
       { name: "fob_currency", label: "FOB currency", type: "select", options: cur, span: 1, section: "Terms" }, { name: "fob_deposit", label: "FOB deposit %", type: "percent", span: 1, section: "Terms" },
       { name: "notes", label: "Note", type: "textarea", section: "Note" }]}

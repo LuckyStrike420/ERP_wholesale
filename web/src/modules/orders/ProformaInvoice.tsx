@@ -4,6 +4,7 @@
  * (choose "Save as PDF"); only the document is printed, not the app around it.
  * Company details come from Admin → Settings (company_*); nothing is invented when they are empty.
  */
+import { place } from "@/app/countries";
 import { vatSplit } from "@/app/vat";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,7 +64,7 @@ function SalesDocument({ kind }: { kind: "pi" | "invoice" }) {
             <dt>PI number</dt><dd className={inv ? "" : "font-semibold text-gray-900"}>{o.pi_number}</dd>
             <dt>Date</dt><dd>{date(inv ? o.invoice_date : o.pi_date ?? o.po_date)}</dd>
             {o.customer_po && <><dt>Your PO</dt><dd>{o.customer_po}</dd></>}
-            <dt>Terms</dt><dd>{o.order_type}{o.order_type === "FOB" && ship?.port_loading ? ` ${ship.port_loading}` : ""}</dd>
+            <dt>Terms</dt><dd>{o.order_type}{o.order_type === "FOB" && ship?.port_loading ? ` ${place(ship.port_loading, ship.port_loading_country)}` : ""}</dd>
             <dt>Currency</dt><dd>{cur}</dd>
           </dl>
         </div>
@@ -74,14 +75,14 @@ function SalesDocument({ kind }: { kind: "pi" | "invoice" }) {
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Bill to</div>
           <div className="font-semibold text-gray-900">{c.name}</div>
           {c.address && <div className="whitespace-pre-line">{c.address}</div>}
-          {!c.address && c.country && <div>{c.country}</div>}
+          {c.country && <div>{c.country}</div>}
           {c.vat_number && <div className="text-gray-500">VAT {c.vat_number}</div>}
           {c.contact_name && <div className="text-gray-500">Attn. {c.contact_name}{c.email ? ` · ${c.email}` : ""}</div>}
         </div>
         {ship && (ship.port_loading || ship.port_discharge) && <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Shipment</div>
-          {ship.port_loading && <div>Port of loading: {ship.port_loading}</div>}
-          {ship.port_discharge && <div>Port of discharge: {ship.port_discharge}</div>}
+          {ship.port_loading && <div>Port of loading: {place(ship.port_loading, ship.port_loading_country)}</div>}
+          {ship.port_discharge && <div>Port of discharge: {place(ship.port_discharge, ship.port_discharge_country)}</div>}
           {ship.etd && <div>ETD {date(ship.etd)}</div>}
         </div>}
       </section>

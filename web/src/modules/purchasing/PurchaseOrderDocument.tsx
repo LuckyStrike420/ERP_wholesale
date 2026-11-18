@@ -61,7 +61,7 @@ export function PurchaseOrderDocument() {
       <section className="py-6">
         <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Supplier</div>
         <div className="font-semibold text-gray-900">{sup.name}</div>
-        {sup.address ? <div className="whitespace-pre-line">{sup.address}</div> : sup.country && <div>{sup.country}</div>}
+        {sup.address && <div className="whitespace-pre-line">{sup.address}</div>}{sup.country && <div>{sup.country}</div>}
         {sup.contact_name && <div className="text-gray-500">Attn. {sup.contact_name}{sup.email ? ` · ${sup.email}` : ""}</div>}
       </section>
 

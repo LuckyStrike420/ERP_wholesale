@@ -3,6 +3,7 @@
  * - Shipment: link the order to a shipment that already exists, start a new one, or unlink, without leaving the order.
  * - To pay suppliers: the purchase orders behind this order, what they cost, what is paid and what is still open.
  */
+import { place } from "@/app/countries";
 import { useCan } from "@/app/permissions";
 import { useState } from "react";
 import { Plus, Ship, Unlink, Wallet } from "lucide-react";
@@ -38,7 +39,7 @@ export function OrderShipment({ o, shipment, lines, locked }: { o: any; shipment
     <KV items={[
       ["Status", <Pill tone={SHIP_TONE[shipment.status]}>{SHIP_LABEL[shipment.status]}</Pill>],
       ["Container", shipment.container_number || "–"], ["Forwarder", shipment.forwarder || "–"],
-      ["Route", [shipment.port_loading, shipment.port_discharge].filter(Boolean).join(" → ") || "–"],
+      ["Route", [place(shipment.port_loading, shipment.port_loading_country), place(shipment.port_discharge, shipment.port_discharge_country)].filter(Boolean).join(" → ") || "–"],
       ["ETD / ETA", `${date(shipment.etd)} / ${date(shipment.eta)}`], ["B/L", shipment.bl_number || "–"],
       ["Also on board", shipment.pi_numbers && shipment.pi_numbers !== o.pi_number ? `PI ${shipment.pi_numbers}` : "only this order"],
     ]} />

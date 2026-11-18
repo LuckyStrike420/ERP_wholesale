@@ -1,6 +1,7 @@
 /**
  * Products and price agreements: /products, /products/new, /products/clever-cane, /prices, /prices/new, /prices/1a2b3c4d
  */
+import { COUNTRY_OPTIONS } from "@/app/countries";
 import { useCan } from "@/app/permissions";
 import { VAT_OPTIONS } from "@/app/vat";
 import { Plus } from "lucide-react";
@@ -47,7 +48,8 @@ export function Products() {
 
 export function ProductForm() {
   const { slug } = useParams(); const { db } = useApp(); const { rows, loading } = useProducts();
-  const suppliers = useRows("suppliers").rows; const kinds = useRows("product_kinds").rows;
+  const suppliers = useRows("suppliers").rows; const kinds = useRows("product_kinds").rows; const ships = useRows("shipments").rows;
+  const cities = [...new Set([...ships.flatMap(x => [x.port_loading, x.port_discharge]), ...rows.map(x => x.pol_city)].filter(Boolean).map(String))].sort().map(c => ({ value: c, label: c }));
   const row = slug ? bySlug(rows, slug) : undefined;
   const rec = row ? { type: "product" as const, id: row.id, label: row.name, path: productPath(row), sub: row.sku ?? undefined } : null;
   useRecord(rec);
@@ -61,6 +63,8 @@ export function ProductForm() {
       { name: `${k}_royalty`, label: `${t} royalty per piece (${c})`, type: "number", span: 1, section: "Cost rules" }] as Field[]; }),
     ...(row ? [{ name: "cost_valid_from", label: "A changed cost rule is valid from", type: "date", span: 1, section: "Cost rules", hint: "Earlier orders keep the old rule. Choose an earlier date only to correct the past: you see the effect first." } as Field] : []),
     { name: "vat_rate", label: "VAT rate", type: "select", span: 1, section: "Standard sale price", options: VAT_OPTIONS, hint: "Only charged on EXW sales and purchases with a Dutch company" },
+    { name: "pol_city", label: "Port of loading: city", type: "select", options: cities, free: true, span: 1, section: "Shipping", hint: "Filled in on a new shipment for an order with this product; you can change it there" },
+    { name: "pol_country", label: "Port of loading: country", type: "select", options: COUNTRY_OPTIONS, span: 1, section: "Shipping" },
     { name: "units_per_carton", label: "Pieces per carton", type: "number", span: 1, section: "Packing", hint: "Used on packing lists: cartons, weights and CBM are worked out from these" },
     { name: "carton_net_kg", label: "Net weight per carton (kg)", type: "number", span: 1, section: "Packing" }, { name: "carton_weight_kg", label: "Gross weight per carton (kg)", type: "number", span: 1, section: "Packing" },
     { name: "carton_length_cm", label: "Carton length (cm)", type: "number", span: 1, section: "Packing" }, { name: "carton_width_cm", label: "Carton width (cm)", type: "number", span: 1, section: "Packing" },

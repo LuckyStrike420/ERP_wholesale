@@ -1,6 +1,7 @@
 /**
  * Shipping and NL stock: /shipping, /shipping/new, /shipping/tiiu2819255/edit, /stock, /stock/batches/new, /stock/items/new, /stock/corrections/new
  */
+import { COUNTRY_OPTIONS, place } from "@/app/countries";
 import { Plus } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
 import { Link, useParams, useQuery } from "@/app/router";
@@ -19,7 +20,7 @@ export function Shipping() {
         { key: "pi_numbers", header: "PI#", render: s => <span className="font-semibold text-gray-900">{ordersOf(s).map((o: any) => <Link key={o.id} to={orderPath(o)} className="mr-2 hover:text-indigo-600">{o.pi_number}</Link>)}{!ordersOf(s).length && "–"}</span> },
         { key: "po_numbers", header: "Our PO" }, { key: "forwarder", header: "Forwarder" },
         { key: "container_number", header: "Container / BL", render: s => <div>{s.container_number ?? "–"}<div className="text-xs text-gray-500">{s.bl_number}</div></div> },
-        { key: "route", header: "Route", value: s => `${s.port_loading ?? ""} ${s.port_discharge ?? ""}`, render: s => s.port_loading || s.port_discharge ? `${s.port_loading ?? "?"} → ${s.port_discharge ?? "?"}` : "–" },
+        { key: "route", header: "Route", value: s => `${place(s.port_loading, s.port_loading_country)} ${place(s.port_discharge, s.port_discharge_country)}`, render: s => s.port_loading || s.port_discharge || s.port_loading_country || s.port_discharge_country ? `${place(s.port_loading, s.port_loading_country) || "?"} → ${place(s.port_discharge, s.port_discharge_country) || "?"}` : "–" },
         { key: "etd", header: "ETD", render: s => date(s.etd) }, { key: "eta", header: "ETA", render: s => date(s.eta) },
         { key: "docs_complete", header: "Docs", render: s => s.docs_complete ? <Pill tone="green">Complete</Pill> : <Pill tone="amber">Open</Pill> },
         { key: "status", header: "Status", render: s => <Pill tone={s.status === "awaiting_info" ? "red" : s.status === "arrived" ? "green" : "blue"}>{SHIP_LABEL[s.status]}</Pill> }]} />
@@ -29,7 +30,7 @@ export function Shipping() {
 
 const shipFields: Field[] = [
   { name: "forwarder", label: "Forwarder", span: 1 }, { name: "container_number", label: "Container#", span: 1 }, { name: "bl_number", label: "BL#", span: 1 },
-  { name: "ready_date", label: "Ready date", type: "date", span: 1 }, { name: "port_loading", label: "Port of loading", span: 1 }, { name: "port_discharge", label: "Port of discharge", span: 1 },
+  { name: "ready_date", label: "Ready date", type: "date", span: 1 },
   { name: "etd", label: "ETD", type: "date", span: 1, section: "Planning" }, { name: "eta", label: "ETA", type: "date", span: 1, section: "Planning", hint: "The FOB balance falls due 10 days before ETA" },
   { name: "docs_complete", label: "Documents complete (BL / CI / PL / COO)", type: "checkbox", section: "Planning" }, { name: "notes", label: "Note", type: "textarea", section: "Planning" }];
 
@@ -38,14 +39,26 @@ export function ShipmentForm() {
   const forOrder = q.get("order"), forPo = q.get("po"), back = q.get("back");
   const ships = useRows("v_shipments"); const orders = useRows("v_orders", { order: [["pi_number", "desc"]] }).rows;
   const pos = useRows("v_purchase_orders", { order: [["po_number", "desc"]] }).rows; const links = useRows("shipment_orders").rows;
+  const prodQ = useRows("products"); const linesQ = useRows(forOrder ? "sales_order_lines" : null, { eq: { sales_order_id: forOrder } });
+  const products = prodQ.rows; const orderLines = linesQ.rows;
   const row = ref ? ships.rows.find(s => shipmentRef(s) === ref) : undefined;
   if (ref && !row) return ships.loading ? <Loading /> : <NotFound what="Shipment" back={{ to: "/shipping", label: "All shipments" }} />;
+  if (!row && forOrder && ((linesQ.loading && !orderLines.length) || (prodQ.loading && !products.length))) return <Loading />;
+  // cities already used, to pick from; any other city can be typed
+  const cities = [...new Set([...ships.rows.flatMap(s => [s.port_loading, s.port_discharge]), ...products.map(p => p.pol_city)].filter(Boolean).map(String))].sort().map(c => ({ value: c, label: c }));
+  // a new shipment for an order: the port of loading of its products (the first one that has it)
+  const pol = products.find(p => p.pol_city && orderLines.some(l => l.product_id === p.id));
+  const portFields: Field[] = [
+    { name: "port_loading", label: "Port of loading: city", type: "select", options: cities, free: true, span: 1, section: "Ports" },
+    { name: "port_loading_country", label: "Port of loading: country", type: "select", options: COUNTRY_OPTIONS, span: 1, section: "Ports", hint: pol && !row ? `From the product ${pol.name}; change it if needed` : undefined },
+    { name: "port_discharge", label: "Port of discharge: city", type: "select", options: cities, free: true, span: 1, section: "Ports" },
+    { name: "port_discharge_country", label: "Port of discharge: country", type: "select", options: COUNTRY_OPTIONS, span: 1, section: "Ports" }];
   const fields: Field[] = [
     ...(row ? [] : [{ name: "sales_order_id", label: "PI", type: "select", span: 1, section: "For", options: orders.filter(o => (o.pi_number || o.id === forOrder) && !links.some(l => l.sales_order_id === o.id)).map(o => ({ value: o.id, label: `${o.pi_number ?? "Draft"} · ${o.customer_name}` })) },
       { name: "purchase_order_id", label: "Our PO", type: "select", span: 1, section: "For", options: pos.map(p => ({ value: p.id, label: `${p.po_number} · ${p.supplier_name}` })) }] as Field[]),
-    ...shipFields.map(f => ({ ...f, section: f.section ?? "Shipment" }))];
+    ...shipFields.map(f => ({ ...f, section: f.section ?? "Shipment" })), ...portFields];
   return <FormPage title={row ? `Shipment ${row.container_number ?? row.pi_numbers ?? ""}` : "New shipment"} back={back ? { to: back, label: "Back to the order" } : { to: "/shipping", label: "Shipping" }} fields={fields}
-    initial={row ?? { sales_order_id: forOrder ?? "", purchase_order_id: forPo ?? "" }}
+    initial={row ?? { sales_order_id: forOrder ?? "", purchase_order_id: forPo ?? "", port_loading: pol?.pol_city ?? "", port_loading_country: pol?.pol_country ?? "" }}
     sub={row ? `For PI ${row.pi_numbers ?? "–"} · PO ${row.po_numbers ?? "–"}` : undefined}
     onSubmit={async v => {
       const { sales_order_id, purchase_order_id, ...ship } = v;
