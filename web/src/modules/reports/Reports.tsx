@@ -1,5 +1,5 @@
 /**
- * Reports: /reports (by customer), /reports/suppliers, /reports/monthly, /reports/products, /reports/cash-flow.
+ * Reports: /reports (by customer), /reports/suppliers, /reports/monthly, /reports/products, /reports/cash-flow, /reports/custom (your own).
  * What is open and late lives under Payments.
  */
 import { useNav, useQuery, usePath } from "@/app/router";
@@ -7,10 +7,11 @@ import { useRows } from "@/app/store";
 import { orderPath, poPath } from "@/app/paths";
 import { DataTable, PageHeader, Section, TabLinks, selectClass, type Col } from "@/app/ui";
 import { date, money, marginPct, monthName, qty } from "@/app/format";
+import { CustomReports } from "./Custom";
 
 const m = (key: string, header: string): Col => ({ key, header, align: "right", render: r => money(r[key], r.currency) });
 
-export default function Reports({ tab }: { tab: "customers" | "suppliers" | "monthly" | "products" | "cash-flow" }) {
+export default function Reports({ tab }: { tab: "customers" | "suppliers" | "monthly" | "products" | "cash-flow" | "custom" }) {
   const nav = useNav(); const q = useQuery(); const path = usePath();
   const cur = q.get("currency") ?? ""; const yearQ = q.get("year");
   const set = (k: string, v: string) => { const n = new URLSearchParams(q); if (v) n.set(k, v); else n.delete(k); nav(`${path}${n.toString() ? "?" + n : ""}`, { replace: true }); };
@@ -20,10 +21,12 @@ export default function Reports({ tab }: { tab: "customers" | "suppliers" | "mon
   const pick = <T extends Record<string, any>>(rows: T[]) => rows.filter(r => !cur || r.currency === cur);
   const curSel = <select aria-label="Currency" className={selectClass + " h-8 w-32"} value={cur} onChange={e => set("currency", e.target.value)}><option value="">EUR and USD</option><option value="EUR">EUR (EXW)</option><option value="USD">USD (FOB)</option></select>;
   const yearSel = <select aria-label="Year" className={selectClass + " h-8 w-24"} value={y ?? ""} onChange={e => set("year", e.target.value)}>{years.map(v => <option key={v} value={v}>{v}</option>)}</select>;
-  return <>
+  const head = <>
     <PageHeader title="Reports" sub="Every table can be searched, sorted and exported. EUR and USD are never added together." />
     <TabLinks tabs={[{ to: "/reports", label: "By customer" }, { to: "/reports/suppliers", label: "By supplier" }, { to: "/reports/monthly", label: "Monthly" },
-      { to: "/reports/products", label: "Products" }, { to: "/reports/cash-flow", label: "Cash-flow forecast" }]} />
+      { to: "/reports/products", label: "Products" }, { to: "/reports/cash-flow", label: "Cash-flow forecast" }, { to: "/reports/custom", label: "Your reports" }]} /></>;
+  if (tab === "custom") return <CustomReports head={head} />;
+  return <>{head}
     {tab === "customers" && <ByCustomer pick={pick} curSel={curSel} />}
     {tab === "suppliers" && <BySupplier pick={pick} curSel={curSel} />}
     {tab === "monthly" && <Section title={`Order value ${y ?? ""} per month, by PO date`}>

@@ -12,6 +12,7 @@ import { ShippingDocumentEdit, ShippingDocumentNew } from "@/modules/documents/S
 import { PurchaseOrderDocument } from "@/modules/purchasing/PurchaseOrderDocument";
 import { CustomerContactForm, SupplierContactForm } from "@/modules/parties/Contacts";
 import { BatchDetail, BatchForm, BatchItemForm } from "@/modules/stock/Batches";
+import { ReportBuilder } from "@/modules/reports/Custom";
 import { LineCost, OrderPurchaseOrder, OrderCorrection, OrderEdit, OrderInvoice, OrderLine, OrderPayment, OrderWriteOff } from "@/modules/orders/OrderForms";
 import { Ledger, ToPay, ToReceive, VoidPayment } from "@/modules/payments/Payments";
 import { PurchaseOrderDetail, PurchaseOrderEdit, PurchaseOrderInvoice, PurchaseOrderNew, PurchaseOrderPayment, PurchaseOrderWriteOff, PurchaseOrders } from "@/modules/purchasing/Purchasing";
@@ -55,7 +56,8 @@ export const ROUTES: Route[] = [
   r("/stock/items/new", "stock", BatchItemForm), r("/stock/items/:id", "stock", BatchItemForm), r("/stock/corrections/new", "stock", StockCorrection),
   r("/reports", "reports", () => <Reports tab="customers" />), r("/reports/suppliers", "reports", () => <Reports tab="suppliers" />),
   r("/reports/monthly", "reports", () => <Reports tab="monthly" />), r("/reports/products", "reports", () => <Reports tab="products" />),
-  r("/reports/cash-flow", "reports", () => <Reports tab="cash-flow" />),
+  r("/reports/cash-flow", "reports", () => <Reports tab="cash-flow" />), r("/reports/custom", "reports", () => <Reports tab="custom" />),
+  r("/reports/custom/new", "reports", ReportBuilder), r("/reports/custom/:id", "reports", ReportBuilder),
   r("/admin", "admin", Settings), r("/admin/settings/:key", "admin", SettingForm),
   r("/admin/automations", "admin", Automations), r("/admin/automations/new", "admin", AutomationForm), r("/admin/automations/:id", "admin", AutomationForm),
   r("/admin/payment-terms", "admin", PaymentTerms), r("/admin/payment-terms/new", "admin", PaymentTermForm), r("/admin/payment-terms/:id", "admin", PaymentTermForm), r("/admin/rates", "admin", Rates), r("/admin/rates/new", "admin", RateNew),

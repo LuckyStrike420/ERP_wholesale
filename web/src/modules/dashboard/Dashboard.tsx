@@ -1,6 +1,7 @@
 /**
  * The dashboard is a grid of independent widgets (see widgets.tsx).
  * Which widgets show, and in what order, is saved per user; "Customize" changes it.
+ * Saved reports marked "Show on the dashboard" are added as widgets too.
  */
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, SlidersHorizontal } from "lucide-react";
@@ -9,7 +10,8 @@ import { useRows } from "@/app/store";
 import { useNav, useQuery } from "@/app/router";
 import { LinkButton, selectClass } from "@/app/ui";
 import { cn } from "@/lib/utils";
-import { WIDGETS } from "./widgets";
+import { WIDGETS as BUILT_IN, type Widget } from "./widgets";
+import { ReportWidget } from "@/modules/reports/Custom";
 import { useLayout } from "@/app/Layout";
 
 // the layout is saved per user (all devices) like the record pages; the old browser-only layout is picked up once
@@ -22,6 +24,9 @@ export default function Dashboard() {
   const thisYear = new Date().getFullYear();
   const years = useMemo(() => [...new Set([thisYear, ...monthly.map(m => m.year)])].sort((a, b) => b - a), [monthly, thisYear]);
   const year = Number(q.get("year") ?? thisYear);
+  const reports = useRows("reports", { order: [["name", "asc"]] }).rows;
+  const WIDGETS: Widget[] = useMemo(() => [...BUILT_IN, ...reports.filter(r => r.on_dashboard).map(r => ({ id: `report:${r.id}`, title: r.name, description: "Your report",
+    span: "half" as const, Component: () => <ReportWidget report={r} /> }))], [reports]);
   const lay = useLayout("dashboard", LEGACY); const { layout, save, editing, setEditing } = lay;
   const order = [...layout.order.filter(id => WIDGETS.some(w => w.id === id)), ...WIDGETS.map(w => w.id).filter(id => !layout.order.includes(id))];
   const shown = order.map(id => WIDGETS.find(w => w.id === id)!).filter(w => !layout.hidden.includes(w.id));
