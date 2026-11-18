@@ -3,6 +3,7 @@
  * Filters live in the URL, so a filter can be saved under a name (per user) and opened again with one click.
  * On the board an order is dragged to another status; the database checks the same rules as the status menu.
  */
+import { useCan } from "@/app/permissions";
 import { useMemo, useState, type DragEvent } from "react";
 import { BookmarkPlus, Columns3, Flag, List, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { Combobox } from "@/app/Combobox";
 const FILTER_KEYS = ["status", "type", "customer", "payment", "q"];
 
 export default function OrdersList() {
-  const nav = useNav(); const q = useQuery(); const { db, run } = useApp();
+  const nav = useNav(); const q = useQuery(); const { db, run } = useApp(); const costs = useCan()("see_costs");
   const view = q.get("view") === "board" ? "board" : "list";
   const status = q.get("status") ?? "open"; const type = q.get("type") ?? ""; const customer = q.get("customer") ?? ""; const payment = q.get("payment") ?? ""; const text = q.get("q") ?? "";
   const go = (n: URLSearchParams) => nav(`/orders${n.toString() ? "?" + n : ""}`, { replace: true });
@@ -93,7 +94,7 @@ export default function OrdersList() {
             { key: "status", header: "Status", render: o => <StatusPill status={o.status} />, edit: { kind: "select", options: STATUS_ORDER.filter(s => s !== "draft").map(s => ({ value: s, label: STATUS_LABEL[s] })),
                 save: (o, v) => db.update("sales_orders", { id: o.id }, { status: v }), can: o => !["completed", "cancelled", "draft"].includes(o.status) } },
             { key: "total_receivable", header: "Order total", align: "right", render: o => money(o.total_receivable, o.currency) },
-            { key: "margin_pct", header: "Margin", align: "right", render: o => <span className={Number(o.cost_missing_lines) > 0 ? "text-amber-600" : ""} title={Number(o.cost_missing_lines) > 0 ? `${o.cost_missing_lines} line(s) without cost price` : undefined}>{marginPct(o.margin_pct, o.cost_missing_lines)}</span> },
+            ...(!costs ? [] : [{ key: "margin_pct", header: "Margin", align: "right" as const, render: (o: any) => <span className={Number(o.cost_missing_lines) > 0 ? "text-amber-600" : ""} title={Number(o.cost_missing_lines) > 0 ? `${o.cost_missing_lines} line(s) without cost price` : undefined}>{marginPct(o.margin_pct, o.cost_missing_lines)}</span> }]),
             { key: "outstanding", header: "Outstanding", align: "right", render: o => <span className={Number(o.overdue_amount) > 0 ? "font-semibold text-rose-600" : Number(o.outstanding) > 0.01 ? "font-medium text-gray-900" : "text-gray-400"}>{money(o.outstanding, o.currency)}</span> },
             { key: "payment_status", header: "Payment", render: o => <PaymentPill status={o.payment_status} /> },
             { key: "balance_due_date", header: "Due", render: o => Number(o.overdue_amount) > 0 ? <span className="font-semibold text-rose-600">{days(o.days_late)} late</span>

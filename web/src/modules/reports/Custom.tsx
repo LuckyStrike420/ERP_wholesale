@@ -16,7 +16,14 @@ import { toast } from "@/app/notify";
 import { cn } from "@/lib/utils";
 import { AGG_LABEL, blankDef, fieldOf, OPS, runReport, SOURCES, sourceOf, type Agg, type Field, type Filter, type ReportDef, type Result } from "./engine";
 import { ReportChart } from "./ReportChart";
+import { useCan } from "@/app/permissions";
 import { Card } from "@/modules/dashboard/widgets";
+
+/** without "See costs and margins": cost, margin and purchase fields are left out (and purchase orders as a source) */
+const COST = /cost|margin|purchase|payable/;
+const forRole = (def: ReportDef, costs: boolean): ReportDef => costs ? def : {
+  ...def, columns: def.columns.filter(k => !COST.test(k)), measures: def.measures.filter(m => m.agg === "count" || !COST.test(m.field)),
+  group: def.group && COST.test(def.group) ? null : def.group, filters: def.filters.filter(f => !COST.test(f.field)) };
 
 export const reportPath = (r: { id: string }) => `/reports/custom/${String(r.id).slice(0, 8)}`;
 
@@ -96,8 +103,10 @@ function Builder({ report }: { report?: any }) {
   const [shared, setShared] = useState(!!report?.shared); const [dash, setDash] = useState(!!report?.on_dashboard);
   const [dirty, setDirty] = useState(!report); const [confirm, setConfirm] = useState(false);
   const mine = !report || !report.owner || report.owner === session?.id || session?.role === "admin";
-  const s = sourceOf(def.source); const { rows, loading } = useSourceRows(def.source);
-  const result = useMemo(() => runReport(def, rows), [def, rows]);
+  const costs = useCan()("see_costs"); const shown = useMemo(() => forRole(def, costs), [def, costs]);
+  const src = sourceOf(def.source); const s = costs ? src : { ...src, fields: src.fields.filter(f => !COST.test(f.key)) };
+  const { rows, loading } = useSourceRows(def.source);
+  const result = useMemo(() => runReport(shown, rows), [shown, rows]);
   const up = (p: Partial<ReportDef>) => { setDef(d => ({ ...d, ...p })); setDirty(true); };
   const numeric = s.fields.filter(f => ["money", "number", "pct"].includes(f.type));
 
@@ -124,7 +133,7 @@ function Builder({ report }: { report?: any }) {
         </Box>
         <Box title="Data">
           <select aria-label="Source" className={selectClass + " w-full"} value={def.source} onChange={e => { setDef({ ...blankDef(e.target.value) }); setDirty(true); }}>
-            {SOURCES.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
+            {SOURCES.filter(x => costs || x.id !== "purchase_orders").map(x => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 text-sm" role="radiogroup" aria-label="Show as">
             {[["list", "List"], ["summary", "Summary"]].map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={(k === "summary") === !!def.group}
               onClick={() => up(k === "summary" ? { group: def.group ?? s.fields.find(f => f.type === "text")?.key, sort: null } : { group: null, sort: null, chart: "none" })}
@@ -161,7 +170,7 @@ function Builder({ report }: { report?: any }) {
           <button type="button" onClick={() => up({ filters: [...def.filters, { field: s.fields[0].key, op: OPS[s.fields[0].type][0].op, value: "" }] })} className="text-xs font-medium text-indigo-600 hover:underline">+ Add a filter</button>
         </Box>
       </aside>
-      <main className="min-w-0">{loading && !rows.length ? <Loading /> : <ReportResult def={def} result={result} />}</main>
+      <main className="min-w-0">{loading && !rows.length ? <Loading /> : <ReportResult def={shown} result={result} />}</main>
     </div>
     <ConfirmDialog open={confirm} onClose={() => setConfirm(false)} danger title={`Delete "${report?.name}"?`} body="Only the report is removed; no data changes." confirmLabel="Delete"
       onConfirm={() => run(() => db.remove("reports", { id: report.id }), "Report deleted").then(() => nav("/reports/custom"))} />
@@ -192,9 +201,10 @@ const Check = ({ label, on, set }: { label: string; on: boolean; set: (v: boolea
 
 /** a saved report as a dashboard widget */
 export function ReportWidget({ report }: { report: any }) {
-  const def: ReportDef = { ...blankDef(), ...(report.definition ?? {}) };
+  const costs = useCan()("see_costs");
+  const def: ReportDef = forRole({ ...blankDef(), ...(report.definition ?? {}) }, costs);
   const { rows, loading } = useSourceRows(def.source);
-  const result = useMemo(() => runReport(def, rows), [report.definition, rows]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const result = useMemo(() => runReport(def, rows), [report.definition, rows, costs]);   // eslint-disable-line react-hooks/exhaustive-deps
   return <Card title={report.name} action={<Link to={reportPath(report)} className="text-xs font-medium text-indigo-600 hover:underline">Open →</Link>}>
     {loading && !rows.length ? <div className="h-32 animate-pulse rounded bg-gray-50" /> : <ReportResult def={def} result={result} compact />}
   </Card>;

@@ -2,6 +2,7 @@
  * Dashboard widgets. Each widget is self-contained (loads its own data) and registered in WIDGETS,
  * so a widget can be added, removed, hidden or moved without touching the others.
  */
+import { useCan } from "@/app/permissions";
 import { useMemo, type ReactNode } from "react";
 import { ArrowRight, Clock } from "lucide-react";
 import { useRows } from "@/app/store";
@@ -37,7 +38,7 @@ function Kpi({ label, children, hint, to, tone }: { label: string; children: Rea
   return to ? <Link to={to} className={cn(cls, "transition-colors hover:border-gray-300")}>{body}</Link> : <div className={cls}>{body}</div>;
 }
 function KpiStrip({ year }: WidgetProps) {
-  const totals = useRows("v_open_items_totals").rows;
+  const totals = useRows("v_open_items_totals").rows; const costs = useCan()("see_costs");
   const yearly = useRows("v_revenue_yearly", { eq: { year } }).rows;
   const tin = totals.filter(t => t.direction === "in"), tout = totals.filter(t => t.direction === "out");
   const per = (rows: any[], k: string) => rows.filter(r => Number(r[k]) !== 0);
@@ -49,9 +50,9 @@ function KpiStrip({ year }: WidgetProps) {
     <Kpi label="Overdue from customers" to="/payments?bucket=overdue" tone={overdue ? "bad" : undefined}
       hint={undated ? <span className="text-amber-700">{undated} of {openIn} have no due date</span> : undefined}>
       {overdue ? per(tin, "overdue_amount").map(t => <div key={t.currency}>{money(t.overdue_amount, t.currency, 0)}</div>) : <span className="text-gray-400">none</span>}</Kpi>
-    <Kpi label="To pay suppliers" to="/payments/suppliers" hint={`${tout.reduce((a, t) => a + Number(t.items), 0)} open POs`}>{per(tout, "outstanding").map(t => <div key={t.currency}>{money(t.outstanding, t.currency, 0)}</div>)}{!tout.length && "–"}</Kpi>
-    <Kpi label={`Revenue ${year}`} to="/reports/monthly" hint={incomplete ? <span className="text-amber-700">margin incomplete: {incomplete} line(s) without cost</span>
-        : yearly.map(y => `${y.order_type} margin ${pct(y.margin_pct, 1)}`).join(" · ") || undefined}>
+    {costs && <Kpi label="To pay suppliers" to="/payments/suppliers" hint={`${tout.reduce((a, t) => a + Number(t.items), 0)} open POs`}>{per(tout, "outstanding").map(t => <div key={t.currency}>{money(t.outstanding, t.currency, 0)}</div>)}{!tout.length && "–"}</Kpi>}
+    <Kpi label={`Revenue ${year}`} to="/reports/monthly" hint={incomplete && costs ? <span className="text-amber-700">margin incomplete: {incomplete} line(s) without cost</span>
+        : costs ? yearly.map(y => `${y.order_type} margin ${pct(y.margin_pct, 1)}`).join(" · ") || undefined : undefined}>
       {yearly.map(y => <div key={y.order_type}>{money(y.revenue, y.currency, 0)}</div>)}{!yearly.length && <span className="text-gray-400">–</span>}</Kpi>
   </div>;
 }

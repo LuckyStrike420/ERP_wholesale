@@ -1,6 +1,7 @@
 /**
  * Purchasing module: /purchasing, /purchasing/new, /purchasing/2774, /purchasing/2774/edit|payment|invoice|write-off
  */
+import { useCan } from "@/app/permissions";
 import { FileText, Pencil, Plus, Receipt } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
 import { Link, useParams, useQuery } from "@/app/router";
@@ -62,7 +63,7 @@ export function PurchaseOrderNew() {
 }
 
 export function PurchaseOrderDetail() {
-  const { p, loading, no } = usePO();
+  const { p, loading, no } = usePO(); const canPay = useCan()("pay_suppliers");
   const id = p?.id ?? null;
   const inv = useRows(id && "supplier_invoices", { eq: { purchase_order_id: id } }).rows[0];
   const lines = useRows(id && "v_order_lines", { eq: { purchase_order_id: id }, order: [["pi_number", "asc"]] }).rows;
@@ -80,7 +81,7 @@ export function PurchaseOrderDetail() {
     <PageHeader back={{ to: "/purchasing", label: "Purchase orders" }}
       title={<span className="flex items-center gap-3">PO {p.po_number}{rec && <FavoriteStar r={rec} />}{p.fully_paid && Number(p.payable) > 0 && <Pill tone="green">Paid</Pill>}{Number(p.overdue_amount) > 0 && <Pill tone="red">{p.days_late} days late</Pill>}</span>}
       sub={<>{supplier ? <Link to={supplierPath(supplier)} className="text-gray-700 hover:text-indigo-600">{p.supplier_name}</Link> : p.supplier_name} · {p.order_type} · {cur}{p.pi_numbers ? ` · for PI ${p.pi_numbers}` : ""}</>}>
-      <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>
+      {canPay && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
       <LinkButton variant="outline" to={`${base}/invoice`}>{inv ? "Edit supplier invoice" : "Supplier invoice received"}</LinkButton>
       <LinkButton variant="outline" to={`${base}/pdf`}><FileText />PO (PDF)</LinkButton>
       <LinkButton variant="outline" to={`${base}/edit`}><Pencil />Edit</LinkButton>

@@ -1,3 +1,4 @@
+import { useCan } from "@/app/permissions";
 import { OrderApproval } from "@/modules/approvals/Approvals";
 import { OrderShipment, OrderSupplierPayments } from "./OrderSupply";
 import { useMemo, useState } from "react";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useApp, useRows } from "@/app/store";
 import { Link, useParams } from "@/app/router";
 import { customerPath, orderPath, poPath, shipmentPath } from "@/app/paths";
-import { ConfirmDialog, DataTable, KV, LinkButton, Loading, NotFound, PageHeader, PaymentPill, Pill, Section, SeverityPill, Stat, StatusPill, selectClass } from "@/app/ui";
+import { ConfirmDialog, DataTable, KV, LinkButton, Loading, NotFound, PageHeader, PaymentPill, Pill, Section, SeverityPill, Stat, StatusPill, selectClass, type Col } from "@/app/ui";
 import { date, money, marginPct, pct, qty, SOURCE_LABEL, STATUS_LABEL, STATUS_ORDER, SHIP_LABEL, termWhen } from "@/app/format";
 import { useOrder } from "./data";
 import { OrderTimeline } from "./Timeline";
@@ -42,7 +43,7 @@ export default function OrderDetail() {
 
   const rec = o ? { type: "order" as const, id: o.id, label: o.pi_number ? `PI ${o.pi_number}` : "Draft order", path: orderPath(o), sub: o.customer_name } : null;
   useRecord(rec);
-  const lay = useLayout("order");
+  const lay = useLayout("order"); const can = useCan(); const costs = can("see_costs");
   if (!o) return loading ? <Loading what="Loading order…" /> : <NotFound what={`Order ${ref}`} back={{ to: "/orders", label: "All orders" }} />;
   const cur = o.currency; const locked = ["completed", "cancelled"].includes(o.status);
   const base = orderPath(o);
@@ -64,7 +65,7 @@ export default function OrderDetail() {
     <PageHeader back={{ to: "/orders", label: "Orders" }}
       title={<span className="flex flex-wrap items-center gap-3">{o.pi_number ? `PI ${o.pi_number}` : "Draft order"}<StatusPill status={o.status} /><PaymentPill status={o.payment_status} />{rec && <FavoriteStar r={rec} />}</span>}
       sub={<>{customer ? <Link to={customerPath(customer)} className="text-gray-700 hover:text-indigo-600">{o.customer_name}</Link> : o.customer_name} · {o.order_type} · {cur}{o.customer_po ? ` · customer PO ${o.customer_po}` : ""}</>}>
-      {!["draft", "cancelled"].includes(o.status) && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
+      {!["draft", "cancelled"].includes(o.status) && can("register_payments") && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
       <LinkButton to={`${base}/edit`} variant="outline"><Pencil />Edit</LinkButton>
       {o.pi_number && <LinkButton to={`${base}/pi`} variant="outline"><FileText />PI (PDF)</LinkButton>}
       {o.invoice_number && <LinkButton to={`${base}/commercial-invoice`} variant="outline"><FileText />Invoice (PDF)</LinkButton>}
@@ -83,8 +84,8 @@ export default function OrderDetail() {
       <Stat label="Received" value={money(o.paid, cur)} hint={Number(o.written_off) ? `written off ${money(o.written_off, cur)}` : o.last_payment_date ? `last on ${date(o.last_payment_date)}` : "nothing yet"} />
       <Stat label="Outstanding" value={money(o.outstanding, cur)} tone={late ? "bad" : Number(o.outstanding) > 0.01 ? "warn" : "good"}
         hint={late ? `${money(o.overdue_amount, cur)} overdue, ${o.days_late} days` : o.reminder_due ? "EXW reminder due" : Number(o.outstanding) > 0.01 ? (o.balance_due_date || o.deposit_due_date ? `due ${date(Number(o.deposit_outstanding) > 0.01 && o.deposit_due_date ? o.deposit_due_date : o.balance_due_date)}` : "no due date set") : "fully paid"} />
-      <Stat label="Margin" value={money(o.margin, cur)} tone={Number(o.cost_missing_lines) > 0 ? "warn" : undefined}
-        hint={Number(o.cost_missing_lines) > 0 ? `incomplete: ${o.cost_missing_lines} line(s) without cost price` : marginPct(o.margin_pct, 0)} />
+      {costs && <Stat label="Margin" value={money(o.margin, cur)} tone={Number(o.cost_missing_lines) > 0 ? "warn" : undefined}
+        hint={Number(o.cost_missing_lines) > 0 ? `incomplete: ${o.cost_missing_lines} line(s) without cost price` : marginPct(o.margin_pct, 0)} />}
     </div> },
       { id: "actions", title: "Next actions", node: mine.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
       <div className="mb-2 flex items-center text-sm font-semibold text-amber-900"><AlertTriangle className="mr-1.5 h-4 w-4" />Next actions</div>
@@ -113,11 +114,11 @@ export default function OrderDetail() {
         ]} />
       </Section> },
       { id: "shipment", title: "Shipment", size: "half", node: <OrderShipment o={o} shipment={shipment} lines={lines} locked={locked} /> },
-      { id: "supplier_payments", title: "To pay suppliers", size: "half", node: <OrderSupplierPayments o={o} lines={lines} locked={locked} /> },
+      { id: "supplier_payments", title: "To pay suppliers", size: "half", node: costs ? <OrderSupplierPayments o={o} lines={lines} locked={locked} /> : null },
       { id: "lines", title: "Order lines", node: <Section title="Order lines" action={!locked && <span className="flex gap-2">{poButton}<LinkButton size="sm" variant="outline" to={`${base}/lines/new`}><Plus />Add line</LinkButton></span>}>
       <DataTable rows={lines} empty="No lines yet. Add the first product." exportName={`order-${o.pi_number ?? "draft"}-lines`}
         rowTo={locked ? undefined : l => `${base}/lines/${l.line_no}`}
-        cols={[
+        cols={([
           { key: "line_no", header: "#", width: "2.5rem" },
           { key: "product", header: "Product", value: l => pName[l.product_id], render: l => <div><div className="font-medium text-gray-900">{pName[l.product_id]}</div>{l.notes && <div className="text-xs text-gray-500">{l.notes}</div>}</div> },
           { key: "qty", header: "Qty", align: "right", render: l => <>{qty(l.qty)}{l.quantity_cancelled > 0 && <div className="text-xs text-rose-600">{qty(l.quantity_cancelled)} cancelled</div>}</> },
@@ -129,10 +130,10 @@ export default function OrderDetail() {
           { key: "po", header: "Our PO", value: l => po[l.purchase_order_id]?.po_number, render: l => po[l.purchase_order_id] ? <Link to={poPath(po[l.purchase_order_id])} className="text-indigo-600 hover:underline">{po[l.purchase_order_id].po_number}</Link>
               : !locked && Number(l.qty) > 0 ? <Link to={`${base}/purchase-order`} className="text-xs font-medium text-amber-700 hover:underline">no PO · create</Link> : "–" },
           { key: "batch", header: "Batch", value: l => batchNo[l.batch_item_id], render: l => batchNo[l.batch_item_id] ?? "–" },
-          { key: "act", header: "", width: "3rem", render: l => locked ? null : <Button size="icon" variant="ghost" aria-label={`Remove line ${l.line_no}`} className="h-7 w-7 text-gray-400 hover:text-rose-600"
+          { key: "act", header: "", width: "3rem", render: l => locked || !can("delete_records") ? null : <Button size="icon" variant="ghost" aria-label={`Remove line ${l.line_no}`} className="h-7 w-7 text-gray-400 hover:text-rose-600"
               onClick={e => { e.stopPropagation(); setConfirm({ title: "Remove this line?", label: "Remove line", body: `${pName[l.product_id]}, ${qty(l.quantity)} pieces. To keep the history, set "quantity cancelled" on the line instead.`,
                 go: () => run(() => db.remove("sales_order_lines", { id: l.id }), "Line removed") }); }}><Trash2 className="h-3.5 w-3.5" /></Button> },
-        ]} />
+        ] as Col[]).filter(c => costs || !["unit_cost", "margin", "po"].includes(c.key))} />
     </Section> },
       { id: "payments", title: "Payments and corrections", size: "half", node: <Section title="Payments and corrections" action={!locked && <span className="flex gap-2">
         <LinkButton size="sm" variant="outline" to={`${base}/correction`}>Correction</LinkButton>

@@ -2,6 +2,7 @@
  * All pages and their URLs, in one place. Specific paths come before paths with a :parameter.
  * `section` decides which item in the side menu is highlighted.
  */
+import { Permissions } from "@/modules/admin/Permissions";
 import type { ComponentType } from "react";
 import Dashboard from "@/modules/dashboard/Dashboard";
 import OrdersList from "@/modules/orders/OrdersList";
@@ -40,7 +41,7 @@ export const ROUTES: Route[] = [
   r("/payments", "payments", ToReceive), r("/payments/suppliers", "payments", ToPay), r("/payments/ledger", "payments", Ledger),
   r("/payments/:id/void", "payments", VoidPayment),
   r("/approvals", "approvals", () => <Approvals tab="open" />), r("/approvals/all", "approvals", () => <Approvals tab="all" />),
-  r("/admin/approvals", "admin", ApprovalPolicies), r("/admin/approvals/new", "admin", ApprovalPolicyForm), r("/admin/approvals/:id", "admin", ApprovalPolicyForm),
+  r("/admin/permissions", "admin", Permissions), r("/admin/approvals", "admin", ApprovalPolicies), r("/admin/approvals/new", "admin", ApprovalPolicyForm), r("/admin/approvals/:id", "admin", ApprovalPolicyForm),
   r("/tasks", "tasks", Tasks), r("/tasks/new", "tasks", TaskForm), r("/tasks/:id", "tasks", TaskForm),
   r("/purchasing", "purchasing", PurchaseOrders), r("/purchasing/new", "purchasing", PurchaseOrderNew),
   r("/purchasing/:po", "purchasing", PurchaseOrderDetail), r("/purchasing/:po/edit", "purchasing", PurchaseOrderEdit),

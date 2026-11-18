@@ -3,6 +3,7 @@
  * - Shipment: link the order to a shipment that already exists, start a new one, or unlink, without leaving the order.
  * - To pay suppliers: the purchase orders behind this order, what they cost, what is paid and what is still open.
  */
+import { useCan } from "@/app/permissions";
 import { useState } from "react";
 import { Plus, Ship, Unlink, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,7 @@ export function OrderShipment({ o, shipment, lines, locked }: { o: any; shipment
 
 /** what the purchase side of this order costs and what is still open to the supplier(s) */
 export function OrderSupplierPayments({ o, lines, locked }: { o: any; lines: any[]; locked: boolean }) {
-  const all = useRows("v_purchase_orders").rows;
+  const all = useRows("v_purchase_orders").rows; const canPay = useCan()("pay_suppliers");
   const base = orderPath(o);
   const ids = [...new Set(lines.map(l => l.purchase_order_id).filter(Boolean))];
   const pos = all.filter(p => ids.includes(p.id));
@@ -101,7 +102,7 @@ export function OrderSupplierPayments({ o, lines, locked }: { o: any; lines: any
                 <div className={cn("text-xs", late ? "text-rose-600" : "text-gray-500")}>{n.what} {n.due ? `due ${date(n.due)}` : "· no due date"}{late && p.days_late ? `, ${p.days_late} days late` : ""}</div></>
                 : <Pill tone="green">paid</Pill>}
             </div>
-            {n && !locked && <LinkButton size="sm" variant="outline" to={`${poPath(p)}/payment?back=${encodeURIComponent(base)}`}><Wallet />Pay</LinkButton>}
+            {n && !locked && canPay && <LinkButton size="sm" variant="outline" to={`${poPath(p)}/payment?back=${encodeURIComponent(base)}`}><Wallet />Pay</LinkButton>}
           </li>; })}
       </ul>
       <div className="flex flex-wrap gap-x-6 gap-y-1 border-t border-gray-100 px-5 py-2.5 text-xs text-gray-500">

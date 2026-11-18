@@ -2,6 +2,7 @@
  * Shared building blocks. Every screen is composed from these, so the look and behaviour stay the same everywhere.
  * Design tokens: Tailwind gray neutrals, one accent (indigo), rose = late, amber = check, emerald = done.
  */
+import { useCan } from "@/app/permissions";
 import { useMemo, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, Copy, Download, Pencil, Search, X } from "lucide-react";
 import { toast } from "./notify";
@@ -140,7 +141,7 @@ export function DataTable<T extends Record<string, any>>({ rows, cols, rowTo, on
 }) {
   const [picked, setPicked] = useState<Set<string>>(new Set()); const [editing, setEditing] = useState<string | null>(null);
   const rowId = (r: T, i: number) => String(r.id ?? i);
-  const nav = useNav();
+  const nav = useNav(); const canExport = useCan()("export_data");
   const anyLoading = useLoading(); const isLoading = loading ?? anyLoading;
   const [q, setQ] = useState(""); const [sort, setSort] = useState<[string, 1 | -1] | null>(initialSort ?? null);
   const val = (c: Col<T>, r: T) => (c.value ? c.value(r) : r[c.key]);
@@ -179,8 +180,8 @@ export function DataTable<T extends Record<string, any>>({ rows, cols, rowTo, on
           {toolbar}
           <div className="ml-auto flex items-center gap-1 text-xs text-gray-500">
             <span className="mr-2 tabular-nums">{shown.length} of {rows.length}</span>
-            {exportName && <Button variant="ghost" size="sm" className="h-8 text-gray-600" onClick={copy}><Copy className="mr-1 h-3.5 w-3.5" />{selected.length ? `Copy ${selected.length}` : "Copy"}</Button>}
-            {exportName && <Button variant="ghost" size="sm" className="h-8 text-gray-600" onClick={download}><Download className="mr-1 h-3.5 w-3.5" />{selected.length ? `CSV ${selected.length}` : "CSV"}</Button>}
+            {exportName && canExport && <Button variant="ghost" size="sm" className="h-8 text-gray-600" onClick={copy}><Copy className="mr-1 h-3.5 w-3.5" />{selected.length ? `Copy ${selected.length}` : "Copy"}</Button>}
+            {exportName && canExport && <Button variant="ghost" size="sm" className="h-8 text-gray-600" onClick={download}><Download className="mr-1 h-3.5 w-3.5" />{selected.length ? `CSV ${selected.length}` : "CSV"}</Button>}
           </div>
         </div>
       )}

@@ -1,3 +1,4 @@
+import { useCan } from "@/app/permissions";
 import { useEffect, useState } from "react";
 import { AlertTriangle, BarChart3, Boxes, CheckSquare, ClipboardList, Factory, LayoutDashboard, LogOut, Menu, Package, Plus, Receipt, Search, Settings, Ship, ShoppingCart, Tags, Users, X, ShieldCheck } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
@@ -42,13 +43,13 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
   useEffect(() => { appDb.rpc<number>("run_automations").then((n: number) => { if (n) refresh(); }).catch(() => undefined); }, [appDb]);   // eslint-disable-line react-hooks/exhaustive-deps
   const tasks = useRows("v_tasks", { eq: { status: "open" } }).rows;
   const tasksLate = tasks.filter(t => t.state === "overdue").length, tasksToday = tasks.filter(t => t.state === "today").length;
-  const approvals = usePendingApprovals();
+  const approvals = usePendingApprovals(); const costs = useCan()("see_costs");
   const Page = hit?.route.page;
   const nav = <nav className="flex-1 overflow-y-auto px-3 py-4">
     {NAV.map(g => (
       <div key={g.group} className="mb-5">
         {g.group && <div className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{g.group}</div>}
-        {g.items.map(i => { const on = hit?.route.section === i.section;
+        {g.items.filter(i => costs || !["purchasing", "reports"].includes(i.section)).map(i => { const on = hit?.route.section === i.section;
           return <Link key={i.to} to={i.to} aria-current={on ? "page" : undefined}
             className={cn("flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors", on ? "bg-gray-100 font-medium text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900")}>
             <i.icon className={cn("h-4 w-4 shrink-0", on ? "text-indigo-600" : "text-gray-400")} /><span className="flex-1">{i.label}</span>

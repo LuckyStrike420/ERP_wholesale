@@ -28,6 +28,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0022_approvals.sql` | `0022_approvals` | ja (18 nov 2026) |
 | `0023_vat.sql` | `0023_vat` | ja (18 nov 2026) |
 | `0024_vat_deposit.sql` | `0024_vat_deposit` | ja (18 nov 2026) |
+| `0025_permissions.sql` | `0025_permissions` | ja (18 nov 2026) |
 
 ## Regels
 

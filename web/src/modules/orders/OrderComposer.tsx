@@ -4,6 +4,7 @@
  * (customer agreement > standard agreement > product standard price) and shows NL stock. The figures on the
  * right come from the database (preview_order), the same calculation as for a saved order.
  */
+import { useCan } from "@/app/permissions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Copy, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ export default function OrderComposer() {
   const started = useRef(false);
 
   const prod = useMemo(() => Object.fromEntries(products.rows.map(p => [p.id, p])), [products.rows]);
-  const policies = useRows("approval_policies").rows;
+  const policies = useRows("approval_policies").rows; const costs = useCan()("see_costs");
   const nextPi = useMemo(() => { const n = orders.rows.map(o => Number(o.pi_number)).filter(Number.isInteger); return n.length ? String(Math.max(...n) + 1) : ""; }, [orders.rows]);
   const cur = h.order_type === "FOB" ? "USD" : "EUR";
   const lastOrder = h.customer_id ? orders.rows.find(o => o.customer_id === h.customer_id && o.status !== "cancelled") : undefined;
@@ -185,7 +186,7 @@ export default function OrderComposer() {
             <table className="w-full text-sm">
               <thead><tr className="border-b border-gray-100 bg-gray-50/70 text-left text-xs text-gray-500">
                 <th className="px-4 py-2.5 font-medium">Product</th><th className="w-28 px-2 py-2.5 text-right font-medium">Qty</th><th className="w-36 px-2 py-2.5 text-right font-medium">Price ({cur})</th>
-                <th className="whitespace-nowrap px-2 py-2.5 font-medium">NL stock</th><th className="px-2 py-2.5 text-right font-medium">Cost</th><th className="px-2 py-2.5 text-right font-medium">Margin</th><th className="w-10" /></tr></thead>
+                <th className="whitespace-nowrap px-2 py-2.5 font-medium">NL stock</th>{costs && <><th className="px-2 py-2.5 text-right font-medium">Cost</th><th className="px-2 py-2.5 text-right font-medium">Margin</th></>}<th className="w-10" /></tr></thead>
               <tbody>{lines.map(l => { const p = pl(l.key); const st = stock.filter(s => s.product_id === l.product_id && Number(s.stock) > 0);
                 const differs = l.suggestion && num(l.unit_price) !== l.suggestion.price;
                 return <tr key={l.key} className="border-b border-gray-100 align-top last:border-0">
@@ -206,10 +207,10 @@ export default function OrderComposer() {
                   <td className="px-2 py-2.5">{st.length ? <select aria-label="Batch" className={selectClass + " w-full min-w-40"} value={l.batch_item_id} onChange={e => setLine(l.key, { batch_item_id: e.target.value, batch_touched: true })}>
                       <option value="">Not from stock</option>{st.map(s => <option key={s.batch_item_id} value={s.batch_item_id}>{s.batch_number} · {qty(s.stock)} free</option>)}</select>
                     : <span className="whitespace-nowrap text-xs text-gray-400">{l.product_id ? "none" : ""}</span>}</td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">{!p ? <span className="text-gray-300">–</span> : p.unit_cost == null ? <Pill tone="red">missing</Pill>
+                  {costs && <><td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">{!p ? <span className="text-gray-300">–</span> : p.unit_cost == null ? <Pill tone="red">missing</Pill>
                     : <div>{money(p.unit_cost, cur, 3)}<div className="text-xs text-gray-400">{SOURCE_LABEL[p.cost_source]}</div></div>}</td>
                   <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums">{!p ? <span className="text-gray-300">–</span>
-                    : <div className={Number(p.margin) < 0 || p.below_basis ? "font-semibold text-rose-600" : "text-gray-900"}>{money(p.margin, cur)}<div className="text-xs font-normal text-gray-400">{p.margin_pct == null ? "incomplete" : pct(p.margin_pct)}</div></div>}</td>
+                    : <div className={Number(p.margin) < 0 || p.below_basis ? "font-semibold text-rose-600" : "text-gray-900"}>{money(p.margin, cur)}<div className="text-xs font-normal text-gray-400">{p.margin_pct == null ? "incomplete" : pct(p.margin_pct)}</div></div>}</td></>}
                   <td className="py-2.5 pr-3"><Button size="icon" variant="ghost" aria-label="Remove line" className="h-8 w-8 text-gray-400 hover:text-rose-600" onClick={() => setLines(ls => ls.length > 1 ? ls.filter(x => x.key !== l.key) : [blank()])}><Trash2 className="h-3.5 w-3.5" /></Button></td>
                 </tr>; })}</tbody>
             </table>
@@ -225,8 +226,8 @@ export default function OrderComposer() {
             <Row label="Order value" value={o ? money(o.order_value, cur) : "–"} strong />
             {Number(o?.vat_amount) > 0 && <Row label="VAT (Dutch customer, EXW)" value={money(o.vat_amount, cur)} />}
             {Number(o?.vat_amount) > 0 && <Row label="Total incl. VAT" value={money(o.total_receivable, cur)} strong />}
-            <Row label="Purchase cost" value={o ? money(o.total_cost, cur) : "–"} />
-            <Row label="Margin" value={o ? <span className={missing ? "text-amber-700" : ""}>{money(o.margin, cur)} · {o.margin_pct == null ? "incomplete" : pct(o.margin_pct)}</span> : "–"} />
+            {costs && <Row label="Purchase cost" value={o ? money(o.total_cost, cur) : "–"} />}
+            {costs && <Row label="Margin" value={o ? <span className={missing ? "text-amber-700" : ""}>{money(o.margin, cur)} · {o.margin_pct == null ? "incomplete" : pct(o.margin_pct)}</span> : "–"} />}
             <div className="border-t border-gray-100 pt-2" />
             <Row label={`Deposit ${o ? pct(o.deposit_pct, 0) : term ? pct(term.deposit_pct, 0) : ""}`} value={o ? money(o.deposit_due, cur) : "–"} />
             {o?.deposit_due_date && <Row label="Deposit due" value={date(o.deposit_due_date)} />}

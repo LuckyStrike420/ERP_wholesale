@@ -1,6 +1,7 @@
 /**
  * Products and price agreements: /products, /products/new, /products/clever-cane, /prices, /prices/new, /prices/1a2b3c4d
  */
+import { useCan } from "@/app/permissions";
 import { VAT_OPTIONS } from "@/app/vat";
 import { Plus } from "lucide-react";
 import { useApp, useRows } from "@/app/store";
@@ -28,7 +29,7 @@ const rule = (x: any, cur: string) => !x || (x.cost_basis == null && x.share_abo
   : x.cost_basis == null ? `${pct(x.share_above_basis, 0)} of sale price` : `${money(x.cost_basis, cur, 2)} + ${pct(x.share_above_basis, 0)} above`;
 
 export function Products() {
-  const { rows, year } = useProducts(); const suppliers = useRows("suppliers").rows; const { db } = useApp();
+  const { rows, year } = useProducts(); const suppliers = useRows("suppliers").rows; const { db } = useApp(); const costs = useCan()("see_costs");
   const field = (k: string) => (p: any, v: any) => db.update("products", { id: p.id }, { [k]: v });
   const sName = Object.fromEntries(suppliers.map(s => [s.id, s.name]));
   return <>
@@ -39,7 +40,7 @@ export function Products() {
       { key: "sale_price_fob", header: "Price FOB", align: "right", render: p => p.sale_price_fob != null ? money(p.sale_price_fob, "USD", 2) : <span className="text-gray-400">–</span>, edit: { kind: "number", save: field("sale_price_fob") } },
       { key: "sale_price_exw", header: "Price EXW", align: "right", render: p => p.sale_price_exw != null ? money(p.sale_price_exw, "EUR", 2) : <span className="text-gray-400">–</span>, edit: { kind: "number", save: field("sale_price_exw") } },
       { key: "units_per_carton", header: "Pcs/ctn", align: "right", render: p => p.units_per_carton ?? <span className="text-gray-400">–</span>, edit: { kind: "number", save: field("units_per_carton") } },
-      { key: "fob", header: "FOB cost rule", value: p => p.fob?.cost_basis, render: p => rule(p.fob, "USD") }, { key: "exw", header: "EXW cost rule", value: p => p.exw?.cost_basis, render: p => rule(p.exw, "EUR") },
+      ...(costs ? [{ key: "fob", header: "FOB cost rule", value: (p: any) => p.fob?.cost_basis, render: (p: any) => rule(p.fob, "USD") }, { key: "exw", header: "EXW cost rule", value: (p: any) => p.exw?.cost_basis, render: (p: any) => rule(p.exw, "EUR") }] : []),
       { key: "stock", header: "NL stock", align: "right", render: p => Number(p.stock) ? qty(p.stock) : "–" }, { key: "units", header: `Sold ${year}`, align: "right", render: p => p.units ? qty(p.units) : "–" }]} /></Section>
   </>;
 }
