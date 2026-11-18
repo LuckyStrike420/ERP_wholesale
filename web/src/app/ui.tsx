@@ -224,16 +224,18 @@ export function DataTable<T extends Record<string, any>>({ rows, cols, rowTo, on
 export interface Field { name: string; label: string; type?: "text" | "number" | "date" | "select" | "textarea" | "checkbox" | "percent"; options?: { value: string; label: string }[];
   required?: boolean; hint?: string; span?: 1 | 2; placeholder?: string; section?: string;
   /** select: allow any typed text as the value (e.g. a role) */ free?: boolean;
-  /** select on customer_id / supplier_id / product_id: set false to not offer "add new" */ create?: boolean; }
+  /** select on customer_id / supplier_id / product_id: set false to not offer "add new" */ create?: boolean;
+  /** show this field only when it applies (e.g. only for one kind of rule) */ show?: (values: Record<string, any>) => boolean; }
 
 export const selectClass = "h-9 rounded-md border border-gray-300 bg-white px-2.5 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
 
 /** what a form's onSubmit may return: false = stay (refused), a path = go there, confirm = ask on the page before saving */
 export type SubmitResult = void | false | string | { confirm: { title: string; body: ReactNode; label: string; danger?: boolean; go: () => Promise<void | false | string> } };
 
-export function FormPage({ title, sub, back, fields, initial, submitLabel = "Save", onSubmit, aside, children, done }: {
+export function FormPage({ title, sub, back, fields, initial, submitLabel = "Save", onSubmit, aside, children, done, live }: {
   title: ReactNode; sub?: ReactNode; back: { to: string; label: string }; fields: Field[]; initial?: Record<string, any>; submitLabel?: string;
   onSubmit: (values: Record<string, any>) => Promise<SubmitResult>; aside?: ReactNode; children?: ReactNode; done?: string;
+  /** a summary that follows what is typed, shown above the save button */ live?: (values: Record<string, any>) => ReactNode;
 }) {
   const nav = useNav(); const { refresh, db } = useApp();
   const start = () => Object.fromEntries(fields.map(f => {
@@ -248,6 +250,8 @@ export function FormPage({ title, sub, back, fields, initial, submitLabel = "Sav
     e.preventDefault(); setErr("");
     const out: Record<string, any> = {};
     for (const f of fields) {
+      // a field that does not apply right now is sent empty (so e.g. a rule keeps no leftover settings)
+      if (f.show && !f.show(v)) { out[f.name] = f.type === "checkbox" ? false : null; continue; }
       let x = v[f.name];
       if (f.type === "number" || f.type === "percent") {
         x = String(x).trim() === "" ? null : Number(String(x).replace(",", "."));
@@ -264,7 +268,7 @@ export function FormPage({ title, sub, back, fields, initial, submitLabel = "Sav
   const go = async () => { if (!confirm) return; setBusy(true); try { finish(await confirm.go()); } catch (e2) { setErr(errorText(e2)); } finally { setBusy(false); } };
   // fields grouped under optional section titles
   const groups: { title?: string; fields: Field[] }[] = [];
-  for (const f of fields) { const last = groups[groups.length - 1]; if (!last || (f.section && f.section !== last.title)) groups.push({ title: f.section, fields: [f] }); else last.fields.push(f); }
+  for (const f of fields.filter(x => !x.show || x.show(v))) { const last = groups[groups.length - 1]; if (!last || (f.section && f.section !== last.title)) groups.push({ title: f.section, fields: [f] }); else last.fields.push(f); }
   return <>
     <PageHeader title={title} sub={sub} back={back} />
     <div className={cn("grid gap-6", aside && "lg:grid-cols-[minmax(0,1fr)_20rem]")}>
@@ -294,6 +298,7 @@ export function FormPage({ title, sub, back, fields, initial, submitLabel = "Sav
               </div>
             </Section>))}
           {children}
+          {live && <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-5 py-4 text-sm text-indigo-950">{live(v)}</div>}
           {err && <Notice tone="rose">{err}</Notice>}
           {confirm && <Notice tone={confirm.danger ? "rose" : "amber"} title={confirm.title}>
             <div className="mt-2">{confirm.body}</div>

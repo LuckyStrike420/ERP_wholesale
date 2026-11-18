@@ -21,6 +21,7 @@ import { ShipmentForm, Shipping, Stock, StockCorrection } from "@/modules/logist
 import Reports from "@/modules/reports/Reports";
 import { Audit, Import, RateNew, Rates, SettingForm, Settings, UserForm, Users } from "@/modules/admin/Admin";
 import { PaymentTermForm, PaymentTerms } from "@/modules/admin/PaymentTerms";
+import { AutomationForm, Automations } from "@/modules/admin/Automations";
 import { TaskForm, Tasks } from "@/modules/tasks/Tasks";
 
 export interface Route { path: string; section: string; page: ComponentType }
@@ -56,6 +57,7 @@ export const ROUTES: Route[] = [
   r("/reports/monthly", "reports", () => <Reports tab="monthly" />), r("/reports/products", "reports", () => <Reports tab="products" />),
   r("/reports/cash-flow", "reports", () => <Reports tab="cash-flow" />),
   r("/admin", "admin", Settings), r("/admin/settings/:key", "admin", SettingForm),
+  r("/admin/automations", "admin", Automations), r("/admin/automations/new", "admin", AutomationForm), r("/admin/automations/:id", "admin", AutomationForm),
   r("/admin/payment-terms", "admin", PaymentTerms), r("/admin/payment-terms/new", "admin", PaymentTermForm), r("/admin/payment-terms/:id", "admin", PaymentTermForm), r("/admin/rates", "admin", Rates), r("/admin/rates/new", "admin", RateNew),
   r("/admin/users", "admin", Users), r("/admin/users/:id", "admin", UserForm), r("/admin/audit", "admin", Audit), r("/admin/import", "admin", Import),
 ];

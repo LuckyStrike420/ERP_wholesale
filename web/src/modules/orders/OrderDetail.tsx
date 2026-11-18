@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Ban, ClipboardList, Copy, FileText, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
+import { AlertTriangle, Ban, Flag, ClipboardList, Copy, FileText, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApp, useRows } from "@/app/store";
 import { Link, useParams } from "@/app/router";
@@ -27,6 +27,7 @@ export default function OrderDetail() {
   const shipments = useRows("v_shipments").rows;
   const attention = useRows("v_attention").rows;
   const terms = useRows("payment_terms").rows;
+  const flags = useRows(id && "v_order_flags", { eq: { sales_order_id: id } }).rows;
   const products = useRows("products").rows;
   const pos = useRows("v_purchase_orders").rows;
   const stock = useRows("v_batch_item_stock").rows;
@@ -70,6 +71,7 @@ export default function OrderDetail() {
     </PageHeader>
 
     <OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
+    {flags.length > 0 && <div className="-mt-3 mb-6 flex flex-wrap gap-2">{flags.map(f => <span key={f.rule_id} title={`Rule: ${f.rule_name}`} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800"><Flag className="h-3.5 w-3.5" />{f.flag_text}</span>)}</div>}
 
     <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Stat label="Total to receive" value={money(o.total_receivable, cur)} hint={Number(o.adjustments) ? `incl. corrections ${money(o.adjustments, cur)}` : `${o.line_count} line${o.line_count === 1 ? "" : "s"}`} />

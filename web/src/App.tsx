@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient, type DataClient, type Session } from "@/data/client";
-import { AppProvider, errorText, useRows } from "@/app/store";
+import { AppProvider, errorText, useApp, useRows } from "@/app/store";
 import { Link, ParamsProvider, RouterProvider, match, usePath } from "@/app/router";
 import { NotFound } from "@/app/ui";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,9 @@ function Shell({ db, session, onSignOut }: { db: DataClient; session: Session; o
   const overdue = totals.filter(t => t.direction === "in").reduce((a, t) => a + Number(t.overdue_items), 0);
   const reminders = useRows("v_open_items_summary", { eq: { direction: "in", bucket: "reminder" } }).rows.reduce((a, t) => a + Number(t.items), 0);
   const badge = overdue + reminders;
+  // automation rules also run when the app opens (besides after each change and every hour in the database)
+  const { db: appDb, refresh } = useApp();
+  useEffect(() => { appDb.rpc<number>("run_automations").then((n: number) => { if (n) refresh(); }).catch(() => undefined); }, [appDb]);   // eslint-disable-line react-hooks/exhaustive-deps
   const tasks = useRows("v_tasks", { eq: { status: "open" } }).rows;
   const tasksLate = tasks.filter(t => t.state === "overdue").length, tasksToday = tasks.filter(t => t.state === "today").length;
   const Page = hit?.route.page;

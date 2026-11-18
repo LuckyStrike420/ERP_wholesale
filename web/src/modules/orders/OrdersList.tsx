@@ -4,7 +4,7 @@
  * On the board an order is dragged to another status; the database checks the same rules as the status menu.
  */
 import { useMemo, useState, type DragEvent } from "react";
-import { BookmarkPlus, Columns3, List, Plus, Search, X } from "lucide-react";
+import { BookmarkPlus, Columns3, Flag, List, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { errorText, useApp, useRows } from "@/app/store";
@@ -27,6 +27,8 @@ export default function OrdersList() {
   const orders = useRows("v_orders", { order: [["po_date", "desc"]] }).rows;
   const customers = useRows("customers", { order: [["name", "asc"]] }).rows;
   const views = useRows("saved_views", { eq: { page: "orders" }, order: [["name", "asc"]] }).rows;
+  const flags = useRows("v_order_flags").rows;
+  const flagOf = (id: string) => flags.filter(f => f.sales_order_id === id).map(f => f.flag_text).join(" · ");
   const [naming, setNaming] = useState<string | null>(null);
 
   const needle = text.trim().toLowerCase();
@@ -79,11 +81,12 @@ export default function OrdersList() {
           <Button size="sm" className="h-7 px-2.5 text-xs" onClick={saveView} disabled={!naming.trim()}>Save</Button><Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setNaming(null)}>Cancel</Button></span>}
     </div>
 
-    {view === "board" ? <Board orders={shown} showDone={status === "all" || status === "completed"} /> :
+    {view === "board" ? <Board orders={shown} showDone={status === "all" || status === "completed"} flagOf={flagOf} /> :
       <Section>
         <DataTable rows={shown} exportName="orders" rowTo={o => orderPath(o)} empty="No orders match this filter" selectable bulk={(sel, clear) => <OrdersBulk rows={sel} clear={clear} />}
           cols={[
-            { key: "pi_number", header: "PI#", render: o => <span className="font-semibold text-gray-900">{o.pi_number ?? <span className="font-normal text-gray-400">draft</span>}</span> },
+            { key: "pi_number", header: "PI#", render: o => <span className="inline-flex items-center gap-1.5 font-semibold text-gray-900">{o.pi_number ?? <span className="font-normal text-gray-400">draft</span>}
+                {flagOf(o.id) && <Flag className="h-3.5 w-3.5 text-amber-500" aria-label={flagOf(o.id)}><title>{flagOf(o.id)}</title></Flag>}</span> },
             { key: "customer_name", header: "Customer", render: o => <div><div className="text-gray-900">{o.customer_name}</div><div className="text-xs text-gray-500">{o.order_type}</div></div> },
             { key: "customer_po", header: "Customer PO", render: o => o.customer_po ?? <span className="text-gray-400">–</span>, edit: { kind: "text", save: (o, v) => db.update("sales_orders", { id: o.id }, { customer_po: v }), can: o => !["completed", "cancelled"].includes(o.status) } },
             { key: "po_date", header: "PO date", render: o => date(o.po_date), edit: { kind: "date", save: (o, v) => db.update("sales_orders", { id: o.id }, { po_date: v }), can: o => !["completed", "cancelled"].includes(o.status) } },
@@ -125,7 +128,7 @@ function OrdersBulk({ rows, clear }: { rows: any[]; clear: () => void }) {
 }
 
 // ---------------- board ----------------
-function Board({ orders, showDone }: { orders: any[]; showDone: boolean }) {
+function Board({ orders, showDone, flagOf }: { orders: any[]; showDone: boolean; flagOf: (id: string) => string }) {
   const { db, run } = useApp(); const nav = useNav();
   const tasks = useRows("v_tasks", { eq: { status: "open" } }).rows;
   const [over, setOver] = useState<string | null>(null); const [dragging, setDragging] = useState<any>(null);
@@ -164,6 +167,7 @@ function Board({ orders, showDone }: { orders: any[]; showDone: boolean }) {
                   <div className="text-sm tabular-nums text-gray-900">{money(o.total_receivable, o.currency, 0)}</div>
                   <PaymentPill status={o.payment_status} />
                 </div>
+                {flagOf(o.id) && <div className="mt-2 flex items-center gap-1 text-xs font-medium text-amber-700"><Flag className="h-3 w-3" />{flagOf(o.id)}</div>}
                 {(late || o.reminder_due || t > 0) && <div className="mt-2 flex flex-wrap gap-x-2 border-t border-gray-100 pt-1.5 text-xs">
                   {late && <span className="font-medium text-rose-600">{money(o.overdue_amount, o.currency, 0)} {days(o.days_late)} late</span>}
                   {!late && o.reminder_due && <span className="text-amber-700">payment reminder</span>}
