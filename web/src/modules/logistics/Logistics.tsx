@@ -12,36 +12,61 @@ import { orderPath, shipmentPath, shipmentRef } from "@/app/paths";
 import { DataTable, FormPage, LinkButton, Loading, NotFound, PageHeader, Pill, Section, type Field } from "@/app/ui";
 import { date, money, pct, qty, SHIP_LABEL, today } from "@/app/format";
 import { batchPath } from "@/modules/stock/Batches";
+import { COURIERS, dateLabels, isSea, MODE_LABEL, MODES, modeFor, shipmentLabel, trackingUrl } from "./transport";
 
 export function Shipping() {
   const ships = useRows("v_shipments").rows; const orders = useRows("v_orders").rows; const links = useRows("shipment_orders").rows;
   const ordersOf = (s: any) => links.filter(l => l.shipment_id === s.id && l.sales_order_id).map(l => orders.find(o => o.id === l.sales_order_id)).filter(Boolean);
   return <>
-    <PageHeader title="Shipping" sub="One row per shipment or container. The status follows ETD and ETA."><LinkButton to="/shipping/new"><Plus />New shipment</LinkButton></PageHeader>
+    <PageHeader title="Shipping" sub="One row per shipment: a container, pallets by sea or road, a pick-up by the customer or a courier parcel. The status follows the dates."><LinkButton to="/shipping/new"><Plus />New shipment</LinkButton></PageHeader>
     <Section>
       <DataTable rows={ships} search exportName="shipments" rowTo={s => shipmentPath(s, "/edit")} empty="No shipments yet" cols={[
         { key: "pi_numbers", header: "PI#", render: s => <span className="font-semibold text-gray-900">{ordersOf(s).map((o: any) => <Link key={o.id} to={orderPath(o)} className="mr-2 hover:text-indigo-600">{o.pi_number}</Link>)}{!ordersOf(s).length && "–"}</span> },
-        { key: "po_numbers", header: "Our PO" }, { key: "forwarder", header: "Forwarder" },
-        { key: "container_number", header: "Container / BL", render: s => <div>{s.container_number ?? "–"}<div className="text-xs text-gray-500">{s.bl_number}</div></div> },
-        { key: "route", header: "Route", value: s => `${place(s.port_loading, s.port_loading_country)} ${place(s.port_discharge, s.port_discharge_country)}`, render: s => s.port_loading || s.port_discharge || s.port_loading_country || s.port_discharge_country ? `${place(s.port_loading, s.port_loading_country) || "?"} → ${place(s.port_discharge, s.port_discharge_country) || "?"}` : "–" },
-        { key: "etd", header: "ETD", render: s => date(s.etd) }, { key: "eta", header: "ETA", render: s => date(s.eta) },
+        { key: "po_numbers", header: "Our PO" },
+        { key: "mode", header: "Type", value: s => MODE_LABEL[s.mode], render: s => <span className="whitespace-nowrap">{MODE_LABEL[s.mode]}</span> },
+        { key: "forwarder", header: "Forwarder / carrier", value: s => s.forwarder ?? s.carrier ?? s.collected_by, render: s => s.mode === "pickup" ? (s.collected_by ?? "–") : (s.forwarder ?? s.carrier ?? "–") },
+        { key: "container_number", header: "Reference", value: s => [s.container_number, s.bl_number, s.tracking_number, s.cmr_number].filter(Boolean).join(" "), render: s => <ShipmentRef s={s} /> },
+        { key: "route", header: "Route", value: s => `${place(s.port_loading, s.port_loading_country)} ${place(s.port_discharge, s.port_discharge_country)}`, render: s => isSea(s.mode) && (s.port_loading || s.port_discharge || s.port_loading_country || s.port_discharge_country) ? `${place(s.port_loading, s.port_loading_country) || "?"} → ${place(s.port_discharge, s.port_discharge_country) || "?"}` : "–" },
+        { key: "etd", header: "Departs", render: s => <span title={dateLabels(s.mode).etd}>{date(s.etd)}</span> }, { key: "eta", header: "Arrives", render: s => s.mode === "pickup" ? "–" : <span title={dateLabels(s.mode).eta}>{date(s.eta)}</span> },
         { key: "docs_complete", header: "Docs", render: s => s.docs_complete ? <Pill tone="green">Complete</Pill> : <Pill tone="amber">Open</Pill> },
-        { key: "status", header: "Status", render: s => <Pill tone={s.status === "awaiting_info" ? "red" : s.status === "arrived" ? "green" : "blue"}>{SHIP_LABEL[s.status]}</Pill> }]} />
+        { key: "status", header: "Status", render: s => <Pill tone={s.status === "awaiting_info" ? "red" : s.status === "arrived" || s.status === "collected" ? "green" : "blue"}>{SHIP_LABEL[s.status]}</Pill> }]} />
     </Section>
   </>;
 }
 
+const sea = (v: any) => isSea(v.mode);
+/** a shipment's reference: container + BL, or the courier's tracking number as a link, or the CMR … */
+export function ShipmentRef({ s }: { s: any }) {
+  const url = s.mode === "courier" ? trackingUrl(s.carrier, s.tracking_number) : null;
+  return <div onClick={e => url && e.stopPropagation()}>
+    {url ? <a href={url} target="_blank" rel="noreferrer" className="font-medium text-indigo-600 hover:underline">{s.tracking_number}</a> : shipmentLabel(s)}
+    <div className="text-xs text-gray-500">{[s.container_number && s.bl_number, s.pallets != null && `${s.pallets} pallet${s.pallets === 1 ? "" : "s"}`, s.mode === "pickup" && s.vehicle_plate].filter(Boolean).join(" · ")}</div></div>;
+}
 const shipFields: Field[] = [
-  { name: "forwarder", label: "Forwarder", span: 1 }, { name: "container_number", label: "Container#", span: 1 }, { name: "bl_number", label: "BL#", span: 1 },
+  { name: "mode", label: "Type of transport", type: "select", required: true, options: MODES.map(m => ({ value: m.value, label: m.label })) },
+  { name: "forwarder", label: "Forwarder", span: 1, show: sea },
+  { name: "carrier", label: "Carrier", span: 1, show: v => v.mode === "road" || v.mode === "courier",
+    vary: v => v.mode === "courier" ? { label: "Courier", type: "select", options: COURIERS.map(c => ({ value: c, label: c })), free: true, hint: "FedEx, UPS, DHL, PostNL or type another" } : undefined },
+  { name: "tracking_number", label: "Tracking number", span: 1, show: v => v.mode === "courier" },
+  { name: "container_number", label: "Container#", span: 1, show: v => v.mode === "sea_container" || !v.mode },
+  { name: "bl_number", label: "BL#", span: 1, show: sea, vary: v => v.mode === "sea_lcl" ? { label: "BL# / HBL#" } : undefined },
+  { name: "collected_by", label: "Collected by", span: 1, show: v => v.mode === "pickup", hint: "Company or driver who collects" },
+  { name: "vehicle_plate", label: "Vehicle plate", span: 1, show: v => v.mode === "pickup" },
+  { name: "cmr_number", label: "CMR number", span: 1, show: v => v.mode === "road" || v.mode === "pickup" },
+  { name: "pallets", label: "Pallets", type: "number", span: 1, show: v => v.mode === "sea_lcl" || v.mode === "road" || v.mode === "pickup" },
   { name: "ready_date", label: "Ready date", type: "date", span: 1 },
-  { name: "etd", label: "ETD", type: "date", span: 1, section: "Planning" }, { name: "eta", label: "ETA", type: "date", span: 1, section: "Planning", hint: "The FOB balance falls due 10 days before ETA" },
-  { name: "docs_complete", label: "Documents complete (BL / CI / PL / COO)", type: "checkbox", section: "Planning" }, { name: "notes", label: "Note", type: "textarea", section: "Planning" }];
+  { name: "etd", label: "ETD", type: "date", span: 1, section: "Planning", vary: v => ({ label: dateLabels(v.mode).etd }) },
+  { name: "eta", label: "ETA", type: "date", span: 1, section: "Planning", show: v => v.mode !== "pickup",
+    vary: v => ({ label: dateLabels(v.mode).eta, hint: sea(v) ? "The FOB balance falls due 10 days before ETA" : undefined }) },
+  { name: "docs_complete", label: "Documents complete", type: "checkbox", section: "Planning", vary: v => ({ label: sea(v) ? "Documents complete (BL / CI / PL / COO)" : v.mode === "courier" ? "Documents complete" : "Documents complete (CMR / CI / PL)" }) },
+  { name: "notes", label: "Note", type: "textarea", section: "Planning" }];
 
 export function ShipmentForm() {
   const { ref } = useParams(); const { db } = useApp(); const q = useQuery();
   const forOrder = q.get("order"), forPo = q.get("po"), back = q.get("back"); const useCanCosts = useCan()("see_costs");
   const ships = useRows("v_shipments"); const orders = useRows("v_orders", { order: [["pi_number", "desc"]] }).rows;
   const pos = useRows("v_purchase_orders", { order: [["po_number", "desc"]] }).rows; const links = useRows("shipment_orders").rows;
+  const deliv = useRows(forOrder ? "v_order_delivery" : null, { eq: { sales_order_id: forOrder } }).rows[0];
   const prodQ = useRows("products"); const linesQ = useRows(forOrder ? "sales_order_lines" : null, { eq: { sales_order_id: forOrder } });
   const products = prodQ.rows; const orderLines = linesQ.rows;
   const row = ref ? ships.rows.find(s => shipmentRef(s) === ref) : undefined;
@@ -52,16 +77,16 @@ export function ShipmentForm() {
   // a new shipment for an order: the port of loading of its products (the first one that has it)
   const pol = products.find(p => p.pol_city && orderLines.some(l => l.product_id === p.id));
   const portFields: Field[] = [
-    { name: "port_loading", label: "Port of loading: city", type: "select", options: cities, free: true, span: 1, section: "Ports" },
-    { name: "port_loading_country", label: "Port of loading: country", type: "select", options: COUNTRY_OPTIONS, span: 1, section: "Ports", hint: pol && !row ? `From the product ${pol.name}; change it if needed` : undefined },
-    { name: "port_discharge", label: "Port of discharge: city", type: "select", options: cities, free: true, span: 1, section: "Ports" },
-    { name: "port_discharge_country", label: "Port of discharge: country", type: "select", options: COUNTRY_OPTIONS, span: 1, section: "Ports" }];
+    { name: "port_loading", label: "Port of loading: city", type: "select", options: cities, free: true, span: 1, section: "Ports", show: sea },
+    { name: "port_loading_country", label: "Port of loading: country", type: "select", options: COUNTRY_OPTIONS, span: 1, section: "Ports", show: sea, hint: pol && !row ? `From the product ${pol.name}; change it if needed` : undefined },
+    { name: "port_discharge", label: "Port of discharge: city", type: "select", options: cities, free: true, span: 1, section: "Ports", show: sea },
+    { name: "port_discharge_country", label: "Port of discharge: country", type: "select", options: COUNTRY_OPTIONS, span: 1, section: "Ports", show: sea }];
   const fields: Field[] = [
     ...(row ? [] : [{ name: "sales_order_id", label: "PI", type: "select", span: 1, section: "For", options: orders.filter(o => (o.pi_number || o.id === forOrder) && !links.some(l => l.sales_order_id === o.id)).map(o => ({ value: o.id, label: `${o.pi_number ?? "Draft"} · ${o.customer_name}` })) },
       { name: "purchase_order_id", label: "Our PO", type: "select", span: 1, section: "For", options: pos.map(p => ({ value: p.id, label: `${p.po_number} · ${p.supplier_name}` })) }] as Field[]),
     ...shipFields.map(f => ({ ...f, section: f.section ?? "Shipment" })), ...portFields];
-  return <FormPage title={row ? `Shipment ${row.container_number ?? row.pi_numbers ?? ""}` : "New shipment"} back={back ? { to: back, label: "Back to the order" } : { to: "/shipping", label: "Shipping" }} fields={fields}
-    initial={row ?? { sales_order_id: forOrder ?? "", purchase_order_id: forPo ?? "", port_loading: pol?.pol_city ?? "", port_loading_country: pol?.pol_country ?? "" }}
+  return <FormPage title={row ? `Shipment ${row.container_number ?? row.tracking_number ?? row.pi_numbers ?? ""}` : "New shipment"} back={back ? { to: back, label: "Back to the order" } : { to: "/shipping", label: "Shipping" }} fields={fields}
+    initial={row ?? { mode: modeFor(deliv?.incoterm), sales_order_id: forOrder ?? "", purchase_order_id: forPo ?? "", port_loading: pol?.pol_city ?? "", port_loading_country: pol?.pol_country ?? "" }}
     sub={row ? `For PI ${row.pi_numbers ?? "–"} · PO ${row.po_numbers ?? "–"}` : undefined}
     aside={row && useCanCosts && <LandedCostList shipment={row.id} back={`${shipmentPath(row, "/edit")}${back ? `?back=${encodeURIComponent(back)}` : ""}`} title="Shipment costs" sub="Freight, duties, forwarder … spread over the orders on this shipment." />}
     onSubmit={async v => {

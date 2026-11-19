@@ -38,6 +38,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0032_landed_fence.sql` | `0032_landed_fence` | ja (18 nov 2026) |
 | `0033_delivery_terms.sql` | `0033_delivery_terms` | ja (18 nov 2026) |
 | `0034_one_terms_field.sql` | `0034_one_terms_field` | ja (18 nov 2026) |
+| `0035_transport_types.sql` | `0035_transport_types` | ja (19 nov 2026) |
 
 ## Regels
 

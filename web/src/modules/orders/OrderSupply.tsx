@@ -5,7 +5,8 @@
  */
 import { place } from "@/app/countries";
 import { useCan } from "@/app/permissions";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { dateLabels, isSea, MODE_LABEL, shipmentLabel, trackingUrl } from "@/modules/logistics/transport";
 import { Plus, Ship, Unlink, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useApp, useRows } from "@/app/store";
@@ -15,13 +16,15 @@ import { ConfirmDialog, KV, LinkButton, Pill, Section, selectClass } from "@/app
 import { date, money, SHIP_LABEL } from "@/app/format";
 import { cn } from "@/lib/utils";
 
-const SHIP_TONE: Record<string, string> = { awaiting_info: "grey", planned: "blue", in_transit: "amber", arrived: "green" };
-const shipLabel = (s: any) => [s.container_number || s.forwarder || "Shipment", s.pi_numbers ? `PI ${s.pi_numbers}` : null, s.etd ? `ETD ${date(s.etd)}` : s.eta ? `ETA ${date(s.eta)}` : null].filter(Boolean).join(" · ");
+const SHIP_TONE: Record<string, string> = { awaiting_info: "grey", planned: "blue", in_transit: "amber", arrived: "green", collected: "green" };
+const shipLabel = (s: any) => [shipmentLabel(s), s.pi_numbers ? `PI ${s.pi_numbers}` : null, s.etd ? `ETD ${date(s.etd)}` : s.eta ? `ETA ${date(s.eta)}` : null].filter(Boolean).join(" · ");
 
 export function OrderShipment({ o, shipment, lines, locked }: { o: any; shipment: any; lines: any[]; locked: boolean }) {
   const { db, run, refresh } = useApp();
   const ships = useRows("v_shipments", { order: [["etd", "desc"]] }).rows; const links = useRows("shipment_orders").rows;
   const [pick, setPick] = useState(""); const [unlink, setUnlink] = useState(false);
+  const term = useRows("v_order_delivery", { eq: { sales_order_id: o.id } }).rows[0]?.incoterm ?? o.order_type;
+  const collects = term === "EXW" || term === "FCA";   // the customer collects from our warehouse
   const base = orderPath(o);
   const pos = [...new Set(lines.map(l => l.purchase_order_id).filter(Boolean))] as string[];
   const onePo = pos.length === 1 ? pos[0] : null;
@@ -36,13 +39,7 @@ export function OrderShipment({ o, shipment, lines, locked }: { o: any; shipment
   if (shipment) return <Section title="Shipment" action={<span className="flex items-center gap-3">
       <Link to={`${shipmentPath(shipment, "/edit")}?back=${encodeURIComponent(base)}`} className="text-xs font-medium text-indigo-600 hover:underline">Edit shipment</Link>
       {!locked && <button type="button" onClick={() => setUnlink(true)} className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-rose-600"><Unlink className="h-3.5 w-3.5" />Unlink</button>}</span>}>
-    <KV items={[
-      ["Status", <Pill tone={SHIP_TONE[shipment.status]}>{SHIP_LABEL[shipment.status]}</Pill>],
-      ["Container", shipment.container_number || "–"], ["Forwarder", shipment.forwarder || "–"],
-      ["Route", [place(shipment.port_loading, shipment.port_loading_country), place(shipment.port_discharge, shipment.port_discharge_country)].filter(Boolean).join(" → ") || "–"],
-      ["ETD / ETA", `${date(shipment.etd)} / ${date(shipment.eta)}`], ["B/L", shipment.bl_number || "–"],
-      ["Also on board", shipment.pi_numbers && shipment.pi_numbers !== o.pi_number ? `PI ${shipment.pi_numbers}` : "only this order"],
-    ]} />
+    <KV items={shipmentFacts(shipment, o)} />
     <ConfirmDialog open={unlink} onClose={() => setUnlink(false)} title="Unlink this order from the shipment?" confirmLabel="Unlink"
       body="The shipment itself stays, with any other orders on it. ETD and ETA no longer count for this order's due dates."
       onConfirm={() => run(async () => { await db.remove("shipment_orders", { shipment_id: shipment.id, sales_order_id: o.id }); refresh(); }, "Unlinked")} />
@@ -50,7 +47,7 @@ export function OrderShipment({ o, shipment, lines, locked }: { o: any; shipment
 
   return <Section title="Shipment" sub={o.order_type === "FOB" ? "ETD and ETA of the shipment set the due dates that count from them." : undefined}>
     <div className="space-y-3 px-5 py-4">
-      <div className="flex items-center gap-2 text-sm text-gray-500"><Ship className="h-4 w-4 text-gray-400" />Not on a shipment yet.</div>
+      <div className="flex items-center gap-2 text-sm text-gray-500"><Ship className="h-4 w-4 text-gray-400" />{collects ? "Not collected yet. Record the pick-up (who, when, plate, CMR) as a shipment." : "Not on a shipment yet."}</div>
       {!locked && <>
         {open.length > 0 && <div className="flex gap-2">
           <select aria-label="Existing shipment" className={cn(selectClass, "min-w-0 flex-1")} value={pick} onChange={e => setPick(e.target.value)}>
@@ -59,10 +56,26 @@ export function OrderShipment({ o, shipment, lines, locked }: { o: any; shipment
           </select>
           <Button size="sm" disabled={!pick} onClick={() => link(pick)}>Link</Button>
         </div>}
-        <LinkButton size="sm" variant="outline" to={newPath}><Plus />New shipment for this order</LinkButton>
+        <LinkButton size="sm" variant="outline" to={newPath}><Plus />{collects ? "Record pick-up" : "New shipment for this order"}</LinkButton>
       </>}
     </div>
   </Section>;
+}
+
+/** the facts of a shipment that matter for its type */
+function shipmentFacts(s: any, o: any): [string, ReactNode][] {
+  const d = dateLabels(s.mode); const url = s.mode === "courier" ? trackingUrl(s.carrier, s.tracking_number) : null;
+  const rows: [string, ReactNode][] = [["Status", <Pill tone={SHIP_TONE[s.status]}>{SHIP_LABEL[s.status]}</Pill>], ["Type", MODE_LABEL[s.mode] ?? "–"]];
+  if (isSea(s.mode)) rows.push(
+    ...(s.mode === "sea_container" ? [["Container", s.container_number || "–"]] as [string, ReactNode][] : [["Pallets", s.pallets ?? "–"]] as [string, ReactNode][]),
+    ["Forwarder", s.forwarder || "–"],
+    ["Route", [place(s.port_loading, s.port_loading_country), place(s.port_discharge, s.port_discharge_country)].filter(Boolean).join(" → ") || "–"],
+    ["ETD / ETA", `${date(s.etd)} / ${date(s.eta)}`], ["B/L", s.bl_number || "–"]);
+  else if (s.mode === "road") rows.push(["Carrier", s.carrier || "–"], ["CMR", s.cmr_number || "–"], ["Pallets", s.pallets ?? "–"], [`${d.etd} / ${d.eta.toLowerCase()}`, `${date(s.etd)} / ${date(s.eta)}`]);
+  else if (s.mode === "pickup") rows.push(["Collected by", s.collected_by || "–"], ["Vehicle plate", s.vehicle_plate || "–"], ["CMR", s.cmr_number || "–"], ["Pallets", s.pallets ?? "–"], [d.etd, date(s.etd)]);
+  else rows.push(["Courier", s.carrier || "–"], ["Tracking", url ? <a href={url} target="_blank" rel="noreferrer" className="font-medium text-indigo-600 hover:underline">{s.tracking_number}</a> : s.tracking_number || "–"], [`${d.etd} / ${d.eta.toLowerCase()}`, `${date(s.etd)} / ${date(s.eta)}`]);
+  rows.push([s.mode === "pickup" ? "Also collected" : "Also on it", s.pi_numbers && s.pi_numbers !== o.pi_number ? `PI ${s.pi_numbers}` : "only this order"]);
+  return rows;
 }
 
 /** what the purchase side of this order costs and what is still open to the supplier(s) */

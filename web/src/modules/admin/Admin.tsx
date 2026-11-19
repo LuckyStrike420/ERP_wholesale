@@ -39,7 +39,7 @@ export function SettingForm() {
   if (!s) return loading ? <Loading /> : <NotFound what="Setting" back={{ to: "/admin", label: "Settings" }} />;
   return <FormPage title={s.description} sub={s.key.startsWith("company_") || s.key === "pi_footer" ? "Shown on the proforma invoice (PI) document." : `Current value: ${s.value}. A change applies from now on to every calculation that uses it. Costs that are already final do not change.`}
     back={{ to: "/admin", label: "Settings" }} initial={s} fields={[{ name: "value", label: "New value", required: !s.key.startsWith("company_") && s.key !== "pi_footer", hint: HINT[s.key],
-      type: ["company_address", "company_bank", "pi_footer", "company_vat", "company_contact"].includes(s.key) ? "textarea" : "text" }]}
+      type: ["company_address", "warehouse_address", "company_bank", "pi_footer", "company_vat", "company_contact"].includes(s.key) ? "textarea" : "text" }]}
     onSubmit={async v => {
       const value = String(v.value ?? "").trim();
       const rows = await db.rpc<any[]>("preview_setting_change", { p_key: s.key, p_value: value });

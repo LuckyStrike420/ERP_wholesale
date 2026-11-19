@@ -226,7 +226,9 @@ export interface Field { name: string; label: string; type?: "text" | "number" |
   required?: boolean; hint?: string; span?: 1 | 2; placeholder?: string; section?: string;
   /** select: allow any typed text as the value (e.g. a role) */ free?: boolean;
   /** select on customer_id / supplier_id / product_id: set false to not offer "add new" */ create?: boolean;
-  /** show this field only when it applies (e.g. only for one kind of rule) */ show?: (values: Record<string, any>) => boolean; }
+  /** show this field only when it applies (e.g. only for one kind of rule) */ show?: (values: Record<string, any>) => boolean;
+  /** another label, hint or list depending on what is filled in (e.g. "Pick-up date" for a pick-up) */
+  vary?: (values: Record<string, any>) => Partial<Pick<Field, "label" | "hint" | "options" | "free" | "type">> | undefined; }
 
 export const selectClass = "h-9 rounded-md border border-gray-300 bg-white px-2.5 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
 
@@ -278,7 +280,7 @@ export function FormPage({ title, sub, back, fields, initial, submitLabel = "Sav
           {groups.map((g, gi) => (
             <Section key={gi} title={g.title}>
               <div className="grid grid-cols-2 gap-x-5 gap-y-4 px-5 py-5">
-                {g.fields.map(f => (
+                {g.fields.map(f0 => ({ ...f0, ...(f0.vary?.(v) ?? {}) })).map(f => (
                   <div key={f.name} className={cn(f.span === 1 ? "col-span-2 sm:col-span-1" : "col-span-2")}>
                     {f.type !== "checkbox" && <Label htmlFor={f.name} className="mb-1.5 block text-sm font-medium text-gray-700">{f.label}{f.required && <span className="text-rose-600"> *</span>}</Label>}
                     {f.type === "select" ? (() => {

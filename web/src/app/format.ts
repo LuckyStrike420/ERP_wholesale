@@ -25,7 +25,7 @@ export const PAYMENT_LABEL: Record<string, string> = {
   draft: "–", unpaid: "Unpaid", partially_paid: "Partly paid", deposit_paid: "Deposit paid", paid: "Paid", overpaid: "Overpaid", cancelled: "Cancelled",
 };
 export const SOURCE_LABEL: Record<string, string> = { override: "Override", batch: "Batch", agreement: "Price agreement", product_rule: "Product rule" };
-export const SHIP_LABEL: Record<string, string> = { awaiting_info: "Awaiting shipping info", planned: "Planned", in_transit: "In transit", arrived: "Arrived" };
+export const SHIP_LABEL: Record<string, string> = { awaiting_info: "Awaiting shipping info", planned: "Planned", in_transit: "In transit", arrived: "Arrived", collected: "Collected" };
 
 export const days = (n: any) => (n === null || n === undefined ? "–" : `${n} day${Number(n) === 1 ? "" : "s"}`);
 export const BUCKET_LABEL: Record<string, string> = { overdue: "Overdue", reminder: "Reminder due", due_soon: "Due within 7 days", scheduled: "Scheduled", no_due_date: "No due date" };

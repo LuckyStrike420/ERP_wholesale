@@ -6,7 +6,7 @@
  * (clear the field to go back to the worked-out value). After saving the document is your own text: it does not
  * change when the order changes, unless you choose "Fill again from order".
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Download, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { toast } from "@/app/notify";
 import { Button } from "@/components/ui/button";
@@ -106,6 +106,13 @@ function Editor({ o, initial }: { o: any; initial: Doc }) {
   const setH = (k: string) => (v: any) => { setD(x => ({ ...x, header: { ...x.header, [k]: v } })); setDirty(true); };
   const setL = (i: number, k: string, v: any) => { setD(x => ({ ...x, lines: x.lines.map((l, j) => j === i ? { ...l, [k]: v } : l) })); setDirty(true); };
   const pl = d.doc_type === "packing_list";
+  // how the goods travel (from the shipment, or the terms when there is none); older documents have none: the container layout
+  const mode: string = d.header?.mode ?? "sea_container"; const pickup = mode === "pickup";
+  /** one line of the transport block; an empty line is not printed */
+  // a plain function, not a component: a component made here would be new on every render and lose the cursor while typing
+  const f = (k: string, name: string) => { const empty = String(h(name) ?? "").trim() === "";
+    return <Fragment key={k}><dt className={cn("whitespace-nowrap pt-px text-gray-500", empty && "print:hidden")}>{k}</dt>
+      <dd className={cn("min-w-0", empty && "print:hidden")}><Ed label={k} value={h(name)} onChange={setH(name)} placeholder="–" /></dd></Fragment>; };
   const company = (k: string) => (settings.find(s => s.key === k)?.value ?? "").trim();
   const rows = useMemo(() => d.lines.map(l => ({ l, c: calc(l) })), [d.lines]);
   const total = (k: "cartons" | "net_kg" | "gross_kg" | "cbm") => rows.some(r => r.c[k] != null) ? rows.reduce((a, r) => a + (r.c[k] ?? 0), 0) : null;
@@ -168,33 +175,37 @@ function Editor({ o, initial }: { o: any; initial: Doc }) {
               <span className="hidden text-right print:block">{fmtDate(d.doc_date)}</span></Pair>
             <Pair k="PI number"><Ed label="PI number" value={h("pi_number")} onChange={setH("pi_number")} align="right" /></Pair>
             <Pair k="Your PO"><Ed label="Customer PO" value={h("customer_po")} onChange={setH("customer_po")} align="right" /></Pair>
-            {pl && <Pair k="Terms"><Ed label="Terms" value={h("terms")} onChange={setH("terms")} align="right" /></Pair>}
+            <Pair k="Terms"><Ed label="Terms" value={h("terms")} onChange={setH("terms")} align="right" /></Pair>
           </dl>
         </div>
       </header>
 
       <section className="grid grid-cols-2 gap-8 py-5">
         <div>
-          <Label>{pl ? "Consignee" : "Deliver to"}</Label>
-          {pl ? <EdArea label="Consignee" value={h("consignee")} onChange={setH("consignee")} placeholder="Name and address" className="text-gray-900" />
+          {/* collected from our warehouse: there is no delivery address, only the buyer */}
+          <Label>{pickup ? "Buyer" : pl ? "Consignee" : "Deliver to"}</Label>
+          {pl || pickup ? <EdArea label="Consignee" value={h("consignee")} onChange={setH("consignee")} placeholder="Name and address" className="text-gray-900" />
             : <EdArea label="Deliver to" value={h("deliver_to")} onChange={setH("deliver_to")} placeholder="Name and delivery address" className="text-gray-900" />}
-          {!pl && <div className="mt-3"><Label>Customer</Label><EdArea label="Customer" value={h("consignee")} onChange={setH("consignee")} placeholder="Customer name and address" /></div>}
+          {!pl && !pickup && <div className="mt-3"><Label>Customer</Label><EdArea label="Customer" value={h("consignee")} onChange={setH("consignee")} placeholder="Customer name and address" /></div>}
+          {pickup && <div className="mt-3"><Label>Pick-up address</Label><EdArea label="Pick-up address" value={h("pickup_address")} onChange={setH("pickup_address")} placeholder="Our warehouse (Admin → Settings)" /></div>}
         </div>
         <div>
-          <Label>{pl ? "Shipment" : "Delivery"}</Label>
+          <Label>{pickup ? "Collection" : mode === "courier" ? "Courier" : pl ? "Shipment" : "Delivery"}</Label>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
-            {pl ? <>
-              <Pair k="Forwarder"><Ed label="Forwarder" value={h("forwarder")} onChange={setH("forwarder")} placeholder="–" /></Pair>
-              <Pair k="Container"><Ed label="Container" value={h("container_number")} onChange={setH("container_number")} placeholder="–" /></Pair>
-              <Pair k="Seal"><Ed label="Seal" value={h("seal_number")} onChange={setH("seal_number")} placeholder="–" /></Pair>
-              <Pair k="B/L"><Ed label="BL number" value={h("bl_number")} onChange={setH("bl_number")} placeholder="–" /></Pair>
-              <Pair k="Port of loading"><Ed label="Port of loading" value={h("port_loading")} onChange={setH("port_loading")} placeholder="–" /></Pair>
-              <Pair k="Port of discharge"><Ed label="Port of discharge" value={h("port_discharge")} onChange={setH("port_discharge")} placeholder="–" /></Pair>
-              <Pair k="ETD"><Ed label="ETD" value={h("etd")} onChange={setH("etd")} placeholder="–" /></Pair>
+            {pickup ? <>
+              {f("Collected by", "collected_by")}{f("Vehicle plate", "vehicle_plate")}{f("CMR", "cmr_number")}
+              {f("Pallets", "pallets")}{f("Pick-up date", "etd")}
+            </> : mode === "road" ? <>
+              {f("Carrier", "carrier")}{f("CMR", "cmr_number")}{f("Pallets", "pallets")}
+              {f("Loading date", "etd")}{f("Delivery date", pl ? "eta" : "delivery_date")}
+            </> : mode === "courier" ? <>
+              {f("Courier", "carrier")}{f("Tracking", "tracking_number")}{f("Sent on", "etd")}
+            </> : pl ? <>
+              {f("Forwarder", "forwarder")}
+              {mode === "sea_lcl" ? f("Pallets", "pallets") : <>{f("Container", "container_number")}{f("Seal", "seal_number")}</>}
+              {f(mode === "sea_lcl" ? "B/L / HBL" : "B/L", "bl_number")}{f("Port of loading", "port_loading")}{f("Port of discharge", "port_discharge")}{f("ETD", "etd")}
             </> : <>
-              <Pair k="Delivery date"><Ed label="Delivery date" value={h("delivery_date")} onChange={setH("delivery_date")} placeholder="–" /></Pair>
-              <Pair k="Carrier"><Ed label="Carrier" value={h("forwarder")} onChange={setH("forwarder")} placeholder="–" /></Pair>
-              <Pair k="Reference"><Ed label="Reference" value={h("container_number")} onChange={setH("container_number")} placeholder="–" /></Pair>
+              {f("Delivery date", "delivery_date")}{f("Carrier", "forwarder")}{f("Reference", "container_number")}
             </>}
           </dl>
         </div>
