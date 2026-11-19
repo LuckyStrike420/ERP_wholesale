@@ -23,25 +23,27 @@ const DATE_ONLY = new Set(["payment", "invoice", "write_off", "shipment"]);
 /** a moment in your own time zone: "17 Nov 2026 22:24" */
 const local = (v: any) => { const d = new Date(v); return isNaN(+d) ? "–" : `${date(d.toLocaleDateString("sv"))} ${d.toTimeString().slice(0, 5)}`; };
 
-export function OrderTimeline({ o, className }: { o: any; className?: string }) {
+/** notes: only notes, with the box to add one; history: everything that happened, without the box; both: as before */
+export function OrderTimeline({ o, className, mode = "both" }: { o: any; className?: string; mode?: "notes" | "history" | "both" }) {
   const { db, run } = useApp();
   const rows = useRows("v_order_timeline", { eq: { sales_order_id: o.id }, order: [["at", "desc"]] }).rows;
   const [text, setText] = useState(""); const [busy, setBusy] = useState(false); const [changes, setChanges] = useState(false);
-  const shown = changes ? rows : rows.filter(r => r.kind !== "change");
-  const hidden = rows.length - shown.length;
+  const kinds = mode === "notes" ? rows.filter(r => r.kind === "note") : rows;
+  const shown = changes || mode === "notes" ? kinds : kinds.filter(r => r.kind !== "change");
+  const hidden = kinds.length - shown.length;
   const add = async () => {
     if (!text.trim()) return; setBusy(true);
     const ok = await run(() => db.insert("record_notes", { body: text.trim(), sales_order_id: o.id }), "Note added");
     if (ok !== undefined) setText(""); setBusy(false);
   };
-  return <Section title="Timeline" className={className}
+  return <Section title={mode === "notes" ? "Notes" : mode === "history" ? "History" : "Timeline"} className={className}
     action={hidden > 0 || changes ? <button type="button" onClick={() => setChanges(c => !c)} className="text-xs font-medium text-gray-500 hover:text-gray-900">{changes ? "Hide field changes" : `Show ${hidden} field change${hidden === 1 ? "" : "s"}`}</button> : undefined}>
-    <div className="border-b border-gray-100 px-5 py-3">
+    {mode !== "history" && <div className="border-b border-gray-100 px-5 py-3">
       <MentionTextarea placeholder="Add a note: a call, an agreement, something to remember… Type @ to mention a colleague" value={text} onChange={setText} onSubmit={add} className="border-gray-200 text-sm" />
       <div className="mt-2 flex items-center justify-between"><span className="text-xs text-gray-400">Ctrl + Enter to save · @ to mention</span>
         <Button size="sm" onClick={add} disabled={busy || !text.trim()}><Plus className="h-3.5 w-3.5" />Add note</Button></div>
-    </div>
-    {!shown.length ? <p className="px-5 py-8 text-center text-sm text-gray-500">Nothing logged yet</p> :
+    </div>}
+    {!shown.length ? <p className="px-5 py-8 text-center text-sm text-gray-500">{mode === "notes" ? "No notes yet" : "Nothing logged yet"}</p> :
       <ol className="relative px-5 py-4">
         <span aria-hidden className="absolute bottom-6 left-[2.15rem] top-6 w-px bg-gray-100" />
         {shown.map((r, i) => { const k = ICON[r.kind] ?? ICON.change; const Icon = k.icon;

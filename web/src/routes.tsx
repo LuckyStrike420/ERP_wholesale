@@ -31,6 +31,7 @@ import { Audit, Import, RateNew, Rates, SettingForm, Settings, UserForm, Users }
 import { PaymentTermForm, PaymentTerms } from "@/modules/admin/PaymentTerms";
 import { AutomationForm, Automations } from "@/modules/admin/Automations";
 import { TaskForm, Tasks } from "@/modules/tasks/Tasks";
+import { DocSlotForm, DocSlots } from "@/modules/admin/DocSlots";
 
 export interface Route { path: string; section: string; page: ComponentType }
 const r = (path: string, section: string, page: ComponentType): Route => ({ path, section, page });
@@ -48,7 +49,7 @@ export const ROUTES: Route[] = [
   r("/costs/new", "orders", LandedCostForm), r("/costs/:id", "orders", LandedCostForm),
   r("/approvals", "approvals", () => <Approvals tab="open" />), r("/approvals/all", "approvals", () => <Approvals tab="all" />),
   r("/admin/permissions", "admin", Permissions), r("/admin/recycle-bin", "admin", RecycleBin),
-  r("/admin/validation-rules", "admin", ValidationRules), r("/admin/validation-rules/new", "admin", ValidationRuleForm), r("/admin/validation-rules/:id", "admin", ValidationRuleForm), r("/admin/approvals", "admin", ApprovalPolicies), r("/admin/approvals/new", "admin", ApprovalPolicyForm), r("/admin/approvals/:id", "admin", ApprovalPolicyForm),
+  r("/admin/document-slots", "admin", DocSlots), r("/admin/document-slots/new", "admin", DocSlotForm), r("/admin/document-slots/:code", "admin", DocSlotForm), r("/admin/validation-rules", "admin", ValidationRules), r("/admin/validation-rules/new", "admin", ValidationRuleForm), r("/admin/validation-rules/:id", "admin", ValidationRuleForm), r("/admin/approvals", "admin", ApprovalPolicies), r("/admin/approvals/new", "admin", ApprovalPolicyForm), r("/admin/approvals/:id", "admin", ApprovalPolicyForm),
   r("/tasks", "tasks", Tasks), r("/tasks/new", "tasks", TaskForm), r("/tasks/:id", "tasks", TaskForm),
   r("/purchasing", "purchasing", PurchaseOrders), r("/purchasing/new", "purchasing", PurchaseOrderNew),
   r("/purchasing/:po", "purchasing", PurchaseOrderDetail), r("/purchasing/:po/edit", "purchasing", PurchaseOrderEdit),

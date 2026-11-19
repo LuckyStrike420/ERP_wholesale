@@ -12,6 +12,7 @@ import { orderPath, shipmentPath, shipmentRef } from "@/app/paths";
 import { DataTable, FormPage, LinkButton, Loading, NotFound, PageHeader, Pill, Section, type Field } from "@/app/ui";
 import { date, money, pct, qty, SHIP_LABEL, today } from "@/app/format";
 import { batchPath } from "@/modules/stock/Batches";
+import { DocumentsSection } from "@/modules/documents/Documents";
 import { COURIERS, dateLabels, isSea, MODE_LABEL, MODES, modeFor, shipmentLabel, trackingUrl } from "./transport";
 
 export function Shipping() {
@@ -88,7 +89,9 @@ export function ShipmentForm() {
   return <FormPage title={row ? `Shipment ${row.container_number ?? row.tracking_number ?? row.pi_numbers ?? ""}` : "New shipment"} back={back ? { to: back, label: "Back to the order" } : { to: "/shipping", label: "Shipping" }} fields={fields}
     initial={row ?? { mode: modeFor(deliv?.incoterm), sales_order_id: forOrder ?? "", purchase_order_id: forPo ?? "", port_loading: pol?.pol_city ?? "", port_loading_country: pol?.pol_country ?? "" }}
     sub={row ? `For PI ${row.pi_numbers ?? "–"} · PO ${row.po_numbers ?? "–"}` : undefined}
-    aside={row && useCanCosts && <LandedCostList shipment={row.id} back={`${shipmentPath(row, "/edit")}${back ? `?back=${encodeURIComponent(back)}` : ""}`} title="Shipment costs" sub="Freight, duties, forwarder … spread over the orders on this shipment." />}
+    aside={row && <div className="space-y-5">
+      {useCanCosts && <LandedCostList shipment={row.id} back={`${shipmentPath(row, "/edit")}${back ? `?back=${encodeURIComponent(back)}` : ""}`} title="Shipment costs" sub="Freight, duties, forwarder … spread over the orders on this shipment." />}
+      <DocumentsSection entity="shipments" id={row.id} /></div>}
     onSubmit={async v => {
       const { sales_order_id, purchase_order_id, ...ship } = v;
       if (row) { await db.update("shipments", { id: row.id }, ship); return; }

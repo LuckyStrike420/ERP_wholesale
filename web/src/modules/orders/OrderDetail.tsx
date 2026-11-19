@@ -15,10 +15,11 @@ import { date, money, marginPct, pct, qty, SOURCE_LABEL, STATUS_LABEL, STATUS_OR
 import { useOrder } from "./data";
 import { OrderTimeline } from "./Timeline";
 import { OrderPath } from "./OrderPath";
-import { BlockGrid, CustomizeButton, useLayout } from "@/app/Layout";
+import { type Block } from "@/app/Layout";
+import { MoneySummary, OrderTabs, PackingSummary, TABS, TabBlocks, useOrderTab } from "./OrderTabs";
 import { FavoriteStar, useRecord } from "@/app/Favorites";
 import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
-import { DocumentsSection } from "@/modules/documents/Documents";
+import { OrderDocSlots, useDocCount } from "@/modules/documents/Documents";
 import { ShippingDocumentsSection } from "@/modules/documents/ShippingDocument";
 
 export default function OrderDetail() {
@@ -47,7 +48,8 @@ export default function OrderDetail() {
 
   const rec = o ? { type: "order" as const, id: o.id, label: o.pi_number ? `PI ${o.pi_number}` : "Draft order", path: orderPath(o), sub: o.customer_name } : null;
   useRecord(rec);
-  const lay = useLayout("order"); const nav = useNav(); const can = useCan(); const costs = can("see_costs");
+  const nav = useNav(); const [tab, setTab] = useOrderTab();
+  const docCount = useDocCount(id); const openTasks = useRows(id && "tasks", { eq: { sales_order_id: id } }).rows.filter(t => t.status === "open").length; const can = useCan(); const costs = can("see_costs");
   if (!o) return loading ? <Loading what="Loading order…" /> : <NotFound what={`Order ${ref}`} back={{ to: "/orders", label: "All orders" }} />;
   const cur = o.currency; const locked = ["completed", "cancelled"].includes(o.status);
   const base = orderPath(o);
@@ -65,40 +67,7 @@ export default function OrderDetail() {
   const chase = Number(o.deposit_outstanding) > 0.01 ? { what: "deposit", due: o.deposit_due_date } : { what: "payment", due: o.balance_due_date ?? o.deposit_due_date };
   const poButton = !locked && withoutPo.length > 0 && <LinkButton size="sm" to={`${base}/purchase-order`}><ClipboardList />Create PO{withoutPo.length < lines.length ? ` (${withoutPo.length} line${withoutPo.length === 1 ? "" : "s"})` : ""}</LinkButton>;
 
-  return <>
-    <PageHeader back={{ to: "/orders", label: "Orders" }}
-      title={<span className="flex flex-wrap items-center gap-3">{o.pi_number ? `PI ${o.pi_number}` : "Draft order"}<StatusPill status={o.status} /><PaymentPill status={o.payment_status} />{rec && <FavoriteStar r={rec} />}</span>}
-      sub={<>{customer ? <Link to={customerPath(customer)} className="text-gray-700 hover:text-indigo-600">{o.customer_name}</Link> : o.customer_name} · {delivery ? incotermText(delivery.incoterm, delivery.delivery_place) : o.order_type} · {cur}{o.customer_po ? ` · customer PO ${o.customer_po}` : ""}</>}>
-      {!["draft", "cancelled"].includes(o.status) && can("register_payments") && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
-      <LinkButton to={`${base}/edit`} variant="outline"><Pencil />Edit</LinkButton>
-      {o.pi_number && <LinkButton to={`${base}/pi`} variant="outline"><FileText />PI (PDF)</LinkButton>}
-      {o.invoice_number && <LinkButton to={`${base}/commercial-invoice`} variant="outline"><FileText />Invoice (PDF)</LinkButton>}
-      {o.pi_number && <LinkButton to={`/orders/new?from=${encodeURIComponent(o.pi_number)}`} variant="outline"><Copy />Repeat order</LinkButton>}
-      <CustomizeButton lay={lay} />
-      {!locked && o.status_rank < 60 && <Button variant="outline" className="text-rose-600" onClick={() => setConfirm({ title: "Cancel this order?", label: "Cancel order",
-        body: "The order leaves revenue and open amounts. Payments already received stay visible as customer credit. This cannot be undone.",
-        go: () => run(() => db.update("sales_orders", { id: o.id }, { status: "cancelled" }), "Order cancelled") })}><Ban className="h-4 w-4" />Cancel order</Button>}
-      {can("delete_records") && (o.status === "draft" || o.status === "cancelled") && <Button variant="ghost" className="text-rose-600" onClick={() => setConfirm({ title: `Delete ${o.pi_number ? `PI ${o.pi_number}` : "this draft"}?`, label: "Delete order",
-        body: "The order, its lines, tasks, notes and documents go to the recycle bin and can be restored there for 30 days (Admin → Recycle bin). An order with payments, a shipment or an invoice cannot be deleted.",
-        go: () => run(async () => { await db.remove("sales_orders", { id: o.id }); return true; }, "Order deleted; restore it from Admin → Recycle bin within 30 days").then(ok => { if (ok) nav("/orders"); }) })}><Trash2 className="h-4 w-4" />Delete</Button>}
-    </PageHeader>
-
-    <BlockGrid lay={lay} blocks={[
-      { id: "path", title: "Status path", node: <div className="space-y-3"><OrderApproval o={o} /><OrderRuleChecks o={o} /><OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
-        {flags.length > 0 && <div className="-mt-3 flex flex-wrap gap-2">{flags.map(f => <span key={f.rule_id ?? f.flag_text} title={f.rule_id ? `Rule: ${f.rule_name}` : f.rule_name} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800"><Flag className="h-3.5 w-3.5" />{f.flag_text}</span>)}</div>}</div> },
-      { id: "stats", title: "Key figures", node: <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      <Stat label="Total to receive" value={money(o.total_receivable, cur)} hint={[Number(o.vat_amount) ? `incl. VAT ${money(o.vat_amount, cur)}` : null, Number(o.adjustments) ? `incl. corrections ${money(o.adjustments, cur)}` : null].filter(Boolean).join(" · ") || `${o.line_count} line${o.line_count === 1 ? "" : "s"}`} />
-      <Stat label="Received" value={money(o.paid, cur)} hint={Number(o.written_off) ? `written off ${money(o.written_off, cur)}` : o.last_payment_date ? `last on ${date(o.last_payment_date)}` : "nothing yet"} />
-      <Stat label="Outstanding" value={money(o.outstanding, cur)} tone={late ? "bad" : Number(o.outstanding) > 0.01 ? "warn" : "good"}
-        hint={late ? `${money(o.overdue_amount, cur)} overdue, ${o.days_late} days` : o.reminder_due ? "EXW reminder due" : Number(o.outstanding) > 0.01 ? (o.balance_due_date || o.deposit_due_date ? `due ${date(Number(o.deposit_outstanding) > 0.01 && o.deposit_due_date ? o.deposit_due_date : o.balance_due_date)}` : "no due date set") : "fully paid"} />
-      {costs && <Stat label="Margin" value={money(o.margin, cur)} tone={Number(o.cost_missing_lines) > 0 ? "warn" : undefined}
-        hint={Number(o.cost_missing_lines) > 0 ? `incomplete: ${o.cost_missing_lines} line(s) without cost price` : marginPct(o.margin_pct, 0)} />}
-    </div> },
-      { id: "actions", title: "Next actions", node: mine.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
-      <div className="mb-2 flex items-center text-sm font-semibold text-amber-900"><AlertTriangle className="mr-1.5 h-4 w-4" />Next actions</div>
-      <ul className="space-y-1.5 text-sm text-amber-950">{mine.map((a, i) => <li key={i} className="flex items-center gap-2"><SeverityPill s={a.severity} />{a.message}
-        {a.code === "stock_sale_without_po" && !locked && <Link to={`${base}/purchase-order`} className="ml-1 font-medium text-indigo-600 hover:underline">Create PO</Link>}
-        {a.code === "transport_cost_missing" && <Link to={`/costs/new?order=${o.id}&kind=freight&back=${encodeURIComponent(base)}`} className="ml-1 font-medium text-indigo-600 hover:underline">Add transport cost</Link>}</li>)}</ul></div> },
+  const blockList: Block[] = [
       { id: "schedule", title: "Payment schedule", size: "half", node: <Section title="Payment schedule" sub={term ? term.name : "No payment term on this order"}
         action={!locked && <Link to={`${base}/edit`} className="text-xs font-medium text-indigo-600 hover:underline">Change term or dates</Link>}>
         <KV items={[
@@ -161,8 +130,54 @@ export default function OrderDetail() {
       { id: "tasks", title: "Tasks", size: "half", node: <TasksSection eq={{ sales_order_id: o.id }} hide={["order", "customer"]} newLink={newTaskPath({ order: o.pi_number ?? `draft-${o.id.slice(0, 8)}`, back: base })} /> },
       { id: "timeline", title: "Timeline", size: "half", node: <OrderTimeline o={o} /> },
       { id: "shipping_docs", title: "Shipping documents", size: "half", node: <ShippingDocumentsSection o={o} /> },
-      { id: "documents", title: "Documents", size: "half", node: <DocumentsSection entity="sales_orders" id={o.id} /> },
-    ]} />
+      { id: "money", title: "Money", size: "half", node: <MoneySummary o={o} lines={lines} costs={costs} onDetails={() => setTab("payments")} /> },
+      { id: "packing", title: "Packing", size: "half", node: <PackingSummary lines={lines} products={products} shipment={shipment} /> },
+      { id: "slots", title: "Documents", node: <OrderDocSlots o={o} shipment={shipment} lines={lines} /> },
+      { id: "notes", title: "Notes", size: "half", node: <OrderTimeline o={o} mode="notes" /> },
+      { id: "history", title: "History", node: <OrderTimeline o={o} mode="history" /> },
+  ];
+  const blocks: Record<string, Block> = Object.fromEntries(blockList.map(b => [b.id, b]));
+
+  return <>
+    <PageHeader back={{ to: "/orders", label: "Orders" }}
+      title={<span className="flex flex-wrap items-center gap-3">{o.pi_number ? `PI ${o.pi_number}` : "Draft order"}<StatusPill status={o.status} /><PaymentPill status={o.payment_status} />{rec && <FavoriteStar r={rec} />}</span>}
+      sub={<>{customer ? <Link to={customerPath(customer)} className="text-gray-700 hover:text-indigo-600">{o.customer_name}</Link> : o.customer_name} · {delivery ? incotermText(delivery.incoterm, delivery.delivery_place) : o.order_type} · {cur}{o.customer_po ? ` · customer PO ${o.customer_po}` : ""}</>}>
+      {!["draft", "cancelled"].includes(o.status) && can("register_payments") && <LinkButton to={`${base}/payment`}><Receipt />Register payment</LinkButton>}
+      <LinkButton to={`${base}/edit`} variant="outline"><Pencil />Edit</LinkButton>
+      {o.pi_number && <LinkButton to={`${base}/pi`} variant="outline"><FileText />PI (PDF)</LinkButton>}
+      {o.invoice_number && <LinkButton to={`${base}/commercial-invoice`} variant="outline"><FileText />Invoice (PDF)</LinkButton>}
+      {o.pi_number && <LinkButton to={`/orders/new?from=${encodeURIComponent(o.pi_number)}`} variant="outline"><Copy />Repeat order</LinkButton>}
+      {!locked && o.status_rank < 60 && <Button variant="outline" className="text-rose-600" onClick={() => setConfirm({ title: "Cancel this order?", label: "Cancel order",
+        body: "The order leaves revenue and open amounts. Payments already received stay visible as customer credit. This cannot be undone.",
+        go: () => run(() => db.update("sales_orders", { id: o.id }, { status: "cancelled" }), "Order cancelled") })}><Ban className="h-4 w-4" />Cancel order</Button>}
+      {can("delete_records") && (o.status === "draft" || o.status === "cancelled") && <Button variant="ghost" className="text-rose-600" onClick={() => setConfirm({ title: `Delete ${o.pi_number ? `PI ${o.pi_number}` : "this draft"}?`, label: "Delete order",
+        body: "The order, its lines, tasks, notes and documents go to the recycle bin and can be restored there for 30 days (Admin → Recycle bin). An order with payments, a shipment or an invoice cannot be deleted.",
+        go: () => run(async () => { await db.remove("sales_orders", { id: o.id }); return true; }, "Order deleted; restore it from Admin → Recycle bin within 30 days").then(ok => { if (ok) nav("/orders"); }) })}><Trash2 className="h-4 w-4" />Delete</Button>}
+    </PageHeader>
+
+    {/* always on top: where the order stands, its key figures and what needs doing */}
+    <div className="space-y-6">
+      <div className="space-y-3"><OrderApproval o={o} /><OrderRuleChecks o={o} /><OrderPath o={o} lines={lines} shipment={shipment} customer={customer} />
+        {flags.length > 0 && <div className="-mt-3 flex flex-wrap gap-2">{flags.map(f => <span key={f.rule_id ?? f.flag_text} title={f.rule_id ? `Rule: ${f.rule_name}` : f.rule_name} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800"><Flag className="h-3.5 w-3.5" />{f.flag_text}</span>)}</div>}</div>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <Stat label="Total to receive" value={money(o.total_receivable, cur)} hint={[Number(o.vat_amount) ? `incl. VAT ${money(o.vat_amount, cur)}` : null, Number(o.adjustments) ? `incl. corrections ${money(o.adjustments, cur)}` : null].filter(Boolean).join(" · ") || `${o.line_count} line${o.line_count === 1 ? "" : "s"}`} />
+      <Stat label="Received" value={money(o.paid, cur)} hint={Number(o.written_off) ? `written off ${money(o.written_off, cur)}` : o.last_payment_date ? `last on ${date(o.last_payment_date)}` : "nothing yet"} />
+      <Stat label="Outstanding" value={money(o.outstanding, cur)} tone={late ? "bad" : Number(o.outstanding) > 0.01 ? "warn" : "good"}
+        hint={late ? `${money(o.overdue_amount, cur)} overdue, ${o.days_late} days` : o.reminder_due ? "EXW reminder due" : Number(o.outstanding) > 0.01 ? (o.balance_due_date || o.deposit_due_date ? `due ${date(Number(o.deposit_outstanding) > 0.01 && o.deposit_due_date ? o.deposit_due_date : o.balance_due_date)}` : "no due date set") : "fully paid"} />
+      {costs && <Stat label="Margin" value={money(o.margin, cur)} tone={Number(o.cost_missing_lines) > 0 ? "warn" : undefined}
+        hint={Number(o.cost_missing_lines) > 0 ? `incomplete: ${o.cost_missing_lines} line(s) without cost price` : marginPct(o.margin_pct, 0)} />}
+      </div>
+      {mine.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-5 py-4">
+      <div className="mb-2 flex items-center text-sm font-semibold text-amber-900"><AlertTriangle className="mr-1.5 h-4 w-4" />Next actions</div>
+      <ul className="space-y-1.5 text-sm text-amber-950">{mine.map((a, i) => <li key={i} className="flex items-center gap-2"><SeverityPill s={a.severity} />{a.message}
+        {a.code === "stock_sale_without_po" && !locked && <Link to={`${base}/purchase-order`} className="ml-1 font-medium text-indigo-600 hover:underline">Create PO</Link>}
+        {a.code === "transport_cost_missing" && <Link to={`/costs/new?order=${o.id}&kind=freight&back=${encodeURIComponent(base)}`} className="ml-1 font-medium text-indigo-600 hover:underline">Add transport cost</Link>}
+        {a.code === "document_missing" && <button type="button" onClick={() => setTab("documents")} className="ml-1 font-medium text-indigo-600 hover:underline">Upload</button>}</li>)}</ul></div>}
+    </div>
+
+    <OrderTabs tab={tab} setTab={setTab} counts={{ documents: docCount.total ? `${docCount.done}/${docCount.total}` : undefined, notes: openTasks ? String(openTasks) : undefined }}
+      dots={{ payments: late, documents: docCount.late }} />
+    <TabBlocks key={tab} page={`order.${tab}`} blocks={TABS[tab].map(id => blocks[id]).filter(Boolean)} />
     <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)} danger title={confirm?.title ?? ""} body={confirm?.body} confirmLabel={confirm?.label} onConfirm={() => confirm?.go()} />
   </>;
 }
