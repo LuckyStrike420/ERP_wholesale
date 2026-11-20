@@ -186,7 +186,7 @@ function OrderPOForm({ o }: { o: any }) {
   if ([lines, productsQ, suppliersQ, termsQ, posQ, stockQ].some(q => q.loading)) return <Loading />;
   const batchSup = Object.fromEntries(stockQ.rows.map(s => [s.batch_item_id, s.supplier_id]));
   const products = productsQ.rows, suppliers = suppliersQ.rows, terms = termsQ.rows, pos = posQ.rows;
-  const open = lines.rows.filter(l => !l.purchase_order_id && Number(l.qty) > 0);
+  const open = lines.rows.filter(l => !l.purchase_order_id && !l.own_stock && Number(l.qty) > 0);
   if (!open.length) return <NotFound what="An order line without a PO" back={backTo(o)} />;
   const prod = Object.fromEntries(products.map(p => [p.id, p]));
   // suggestions only: the supplier of most products on these lines, and the next free numeric PO#

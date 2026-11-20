@@ -12,6 +12,7 @@ import { TasksSection, newTaskPath } from "@/modules/tasks/Tasks";
 import { DocumentsSection } from "@/modules/documents/Documents";
 import { FavoriteStar, useRecord } from "@/app/Favorites";
 import { BlockGrid, CustomizeButton, useLayout } from "@/app/Layout";
+import { POOwnLines } from "./POLines";
 
 function usePO() {
   const { po } = useParams();
@@ -101,8 +102,9 @@ export function PurchaseOrderDetail() {
         ["Balance", money(Number(p.payable) - Number(p.deposit_due), cur)],
         ["Balance due", p.balance_due_date ? date(p.balance_due_date) : <span className="text-gray-400">not set</span>]]} /></Section> },
       { id: "details", title: "PO details", size: "half", node: <Section title="PO"><KV items={[["PO date", date(p.po_date)], ["Cost prices", inv ? "final (supplier invoice entered)" : "calculated, final at supplier invoice"], ["Note", p.notes ?? "–"]]} /></Section> },
-      { id: "lines", title: "Order lines on this PO", node: <Section title="Order lines on this PO">
-      <DataTable rows={lines} empty="No order lines linked yet. Link a line by choosing this PO on the order." rowTo={l => orderPath({ pi_number: l.pi_number, id: l.sales_order_id })} cols={[
+      { id: "own_lines", title: "Lines on this PO", node: <POOwnLines p={p} /> },
+      { id: "lines", title: "Order lines on this PO", node: <Section title="Order lines on this PO" sub="Lines of sales orders bought on this PO">
+      <DataTable rows={lines} empty="No sales order lines on this PO. To buy for a sales order, create the PO from the order." rowTo={l => orderPath({ pi_number: l.pi_number, id: l.sales_order_id })} cols={[
         { key: "pi_number", header: "PI#", render: l => <span className="font-semibold text-gray-900">{l.pi_number ?? "draft"}</span> }, { key: "product", header: "Product", value: l => pName[l.product_id], render: l => <div>{pName[l.product_id]}<BatchPriceNote l={l} items={batchRows} stock={batchStock} /></div> },
         { key: "qty", header: "Qty", align: "right", render: l => qty(l.qty) }, { key: "unit_cost", header: "Cost per piece", align: "right", render: l => money(l.unit_cost, cur, 3) },
         { key: "purchase_value", header: "Purchase value", align: "right", render: l => money(l.purchase_value, cur) },

@@ -13,8 +13,8 @@ import { ConfirmDialog, DataTable, Loading, NotFound, PageHeader, Pill, Section,
 import { date, dateTime, money, qty, today } from "@/app/format";
 import { cn } from "@/lib/utils";
 
-export const KIND_LABEL: Record<string, string> = { receipt: "Received", sale: "Sale", Telling: "Count", Schade: "Damage", Retour: "Return", Overig: "Other" };
-export const stockTabs = <TabLinks tabs={[{ to: "/stock", label: "Stock" }, { to: "/stock/movements", label: "Movements" }, { to: "/stock/counts", label: "Counts" }, { to: "/stock/value", label: "Stock value" }]} />;
+export const KIND_LABEL: Record<string, string> = { receipt: "Received", sale: "Sale", Telling: "Count", Schade: "Damage", Retour: "Return", Overig: "Other" , Assembly: "Assembly"};
+export const stockTabs = <TabLinks tabs={[{ to: "/stock", label: "Stock" }, { to: "/stock/movements", label: "Movements" }, { to: "/stock/counts", label: "Counts" }, { to: "/stock/value", label: "Stock value" }, { to: "/stock/assemblies", label: "Assembly" }]} />;
 const head = (sub: string) => <PageHeader title="NL stock" sub={sub} />;
 
 // ---------------- movements ----------------

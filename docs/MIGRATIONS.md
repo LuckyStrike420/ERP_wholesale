@@ -40,6 +40,7 @@ De database wordt opgebouwd uit genummerde SQL-bestanden in `supabase/migrations
 | `0034_one_terms_field.sql` | `0034_one_terms_field` | ja (18 nov 2026) |
 | `0035_transport_types.sql` | `0035_transport_types` | ja (19 nov 2026) |
 | `0036_document_slots.sql` | `0036_document_slots` | ja (19 nov 2026) |
+| `0037_own_stock_assembly.sql` | `0037_own_stock_assembly` + `0037_own_stock_attention` (in twee delen toegepast) | ja (20 nov 2026) |
 
 ## Regels
 

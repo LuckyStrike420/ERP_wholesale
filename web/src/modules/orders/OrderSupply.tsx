@@ -84,7 +84,7 @@ export function OrderSupplierPayments({ o, lines, locked }: { o: any; lines: any
   const base = orderPath(o);
   const ids = [...new Set(lines.map(l => l.purchase_order_id).filter(Boolean))];
   const pos = all.filter(p => ids.includes(p.id));
-  const withoutPo = lines.filter(l => !l.purchase_order_id && Number(l.qty) > 0);
+  const withoutPo = lines.filter(l => !l.purchase_order_id && !l.own_stock && Number(l.qty) > 0);
   const part = (pid: string) => lines.filter(l => l.purchase_order_id === pid).reduce((a, l) => a + Number(l.purchase_value ?? 0), 0);
   const byCur = pos.reduce<Record<string, { payable: number; paid: number; open: number; overdue: number }>>((a, p) => {
     const t = a[p.currency] ??= { payable: 0, paid: 0, open: 0, overdue: 0 };

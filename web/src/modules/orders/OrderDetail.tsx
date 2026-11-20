@@ -57,7 +57,7 @@ export default function OrderDetail() {
   const shipment = shipments.find(s => shipLinks.some(l => l.shipment_id === s.id));
   const customer = customers.find(c => c.id === o.customer_id);
   const late = Number(o.overdue_amount) > 0;
-  const withoutPo = lines.filter(l => !l.purchase_order_id && Number(l.qty) > 0);
+  const withoutPo = lines.filter(l => !l.purchase_order_id && !l.own_stock && Number(l.qty) > 0);
   const term = terms.find(t => t.id === o.payment_term_id);
   const open = Number(o.outstanding) > 0.01;
   // where a due date comes from: typed on the order, the payment term, or nothing yet (and why)
@@ -108,6 +108,7 @@ export default function OrderDetail() {
           ...(lines.some(l => Number(l.extra_costs)) ? [{ key: "extra_costs", header: "Extra costs", align: "right" as const, render: (l: any) => Number(l.extra_costs) ? money(l.extra_costs, cur) : "–" }] : []),
           { key: "margin", header: "Margin", align: "right", render: l => <span className={Number(l.margin) < 0 ? "font-semibold text-rose-600" : ""}>{money(l.margin, cur)}<div className="text-xs text-gray-500">{marginPct(l.margin_pct, l.cost_known === false ? 1 : 0)}</div></span> },
           { key: "po", header: "Our PO", value: l => po[l.purchase_order_id]?.po_number, render: l => po[l.purchase_order_id] ? <Link to={poPath(po[l.purchase_order_id])} className="text-indigo-600 hover:underline">{po[l.purchase_order_id].po_number}</Link>
+              : l.own_stock ? <span className="text-xs text-gray-500" title="Sold from our own stock: already paid, no PO needed">own stock</span>
               : !locked && Number(l.qty) > 0 ? <Link to={`${base}/purchase-order`} className="text-xs font-medium text-amber-700 hover:underline">no PO · create</Link> : "–" },
           { key: "batch", header: "Batch", value: l => batchNo[l.batch_item_id], render: l => batchNo[l.batch_item_id] ?? "–" },
           { key: "act", header: "", width: "3rem", render: l => locked || !can("delete_records") ? null : <Button size="icon" variant="ghost" aria-label={`Remove line ${l.line_no}`} className="h-7 w-7 text-gray-400 hover:text-rose-600"

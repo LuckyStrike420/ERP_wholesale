@@ -27,7 +27,8 @@ const PriceCell = ({ i }: { i: any }) => { const t = shareText(i.cost_basis, i.s
 // ---------------- one batch ----------------
 export function BatchDetail() {
   const { batch } = useParams(); const { db } = useApp();
-  const batches = useRows("v_batch_stock"); const b = batches.rows.find(x => x.batch_number === batch);
+  const batches = useRows("v_batch_stock"); const b0 = batches.rows.find(x => x.batch_number === batch);
+  const own = useRows("batches").rows.find(x => x.id === b0?.batch_id)?.own_stock ?? false; const b = b0 && { ...b0, own_stock: own };
   const stock = useRows(b ? "v_batch_item_stock" : null, { eq: { batch_id: b?.batch_id } }).rows;
   const raw = useRows(b ? "batch_items" : null, { eq: { batch_id: b?.batch_id } }).rows;
   const sold = useRows("v_order_lines", { eq: { order_type: "EXW" } }).rows; const landed = useRows("v_batch_landed").rows;
@@ -41,7 +42,7 @@ export function BatchDetail() {
   const noPrice = items.filter(i => i.cost_basis == null && i.share_above_basis == null).length;
   const pctField = (i: any) => i.share_above_basis == null ? null : Number(i.share_above_basis) * 100;
   return <>
-    <PageHeader back={{ to: "/stock", label: "NL stock" }} title={`Batch ${b.batch_number}`}
+    <PageHeader back={{ to: "/stock", label: "NL stock" }} title={<span className="flex items-center gap-3">Batch {b.batch_number}{own && <Pill tone="green">Own stock</Pill>}</span>}
       sub={<>{sup ? <Link to={supplierPath(sup)} className="text-gray-700 hover:text-indigo-600">{sup.name}</Link> : "No supplier"} · received {date(b.received_date)}{b.reference ? ` · ${b.reference}` : ""}</>}>
       <LinkButton variant="outline" to={batchPath(b, "/edit")}><Pencil />Edit batch</LinkButton>
       <LinkButton variant="outline" to={`/stock/corrections/new?batch=${encodeURIComponent(b.batch_number)}`}><SlidersHorizontal />Stock correction</LinkButton>
@@ -49,7 +50,7 @@ export function BatchDetail() {
     </PageHeader>
     <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
       <Stat label="Received" value={qty(b.received)} hint={`${b.product_count} product(s)`} />
-      <Stat label="Sold" value={qty(b.sold)} hint={Number(b.sold_without_po) > 0 ? `${qty(b.sold_without_po)} without PO to the supplier` : "all on a PO"} tone={Number(b.sold_without_po) > 0 ? "warn" : undefined} />
+      <Stat label="Sold" value={qty(b.sold)} hint={own ? "own stock: no PO to the supplier needed" : Number(b.sold_without_po) > 0 ? `${qty(b.sold_without_po)} without PO to the supplier` : "all on a PO"} tone={Number(b.sold_without_po) > 0 ? "warn" : undefined} />
       <Stat label="In stock" value={qty(b.stock)} tone={Number(b.stock) < 0 ? "bad" : undefined} />
       <Stat label="Purchase price" value={noPrice ? `${noPrice} missing` : "complete"} tone={noPrice ? "warn" : "good"} hint={noPrice ? "EXW orders from this batch have no cost" : undefined} />
     </div>
@@ -77,7 +78,7 @@ export function BatchDetail() {
         { key: "unit_price", header: "Sold at", align: "right", render: l => money(l.unit_price, l.currency, 2) },
         { key: "unit_cost", header: "Cost / pc", align: "right", render: l => l.unit_cost == null ? <span className="text-amber-600">unknown</span> : <span>{money(l.unit_cost, l.currency, 2)}{l.cost_is_final && <span className="ml-1 text-xs text-gray-400">final</span>}</span> },
         { key: "purchase_value", header: "To supplier", align: "right", render: l => l.unit_cost == null ? "–" : money(l.purchase_value, l.currency) },
-        { key: "po", header: "PO", render: l => l.purchase_order_id ? <POLink id={l.purchase_order_id} /> : <Link to={orderPath({ pi_number: l.pi_number, id: l.sales_order_id }, "/purchase-order")} onClick={e => e.stopPropagation()} className="text-xs font-medium text-amber-700 hover:underline">no PO · create</Link> },
+        { key: "po", header: "PO", render: l => l.purchase_order_id ? <POLink id={l.purchase_order_id} /> : l.own_stock ? <span className="text-xs text-gray-500">own stock</span> : <Link to={orderPath({ pi_number: l.pi_number, id: l.sales_order_id }, "/purchase-order")} onClick={e => e.stopPropagation()} className="text-xs font-medium text-amber-700 hover:underline">no PO · create</Link> },
       ]} />
     </Section>
   </>;
@@ -96,7 +97,8 @@ export function BatchForm() {
   return <FormPage title={b ? `Edit batch ${b.batch_number}` : "New batch"} sub={b ? undefined : "One batch per shipment the supplier places with us. The products and their purchase price come next."}
     back={b ? { to: batchPath(b), label: `Batch ${b.batch_number}` } : { to: "/stock", label: "NL stock" }} initial={b ?? { received_date: today() }}
     fields={[{ name: "batch_number", label: "Batch#", required: true, span: 1 }, { name: "received_date", label: "Received on", type: "date", span: 1 },
-      { name: "supplier_id", label: "Supplier", type: "select", required: true, options: suppliers.map(s => ({ value: s.id, label: s.name })), hint: "The PO for what is sold from this batch goes to this supplier" },
+      { name: "own_stock", label: "Own stock: bought and paid by us", type: "checkbox", hint: "Sales from this batch need no PO to the supplier; their cost is the purchase price of the batch (plus its landed costs)." },
+      { name: "supplier_id", label: "Supplier", type: "select", required: true, options: suppliers.map(s => ({ value: s.id, label: s.name })), hint: "Without own stock: the PO for what is sold from this batch goes to this supplier" },
       { name: "reference", label: "Container# / reference" }, { name: "notes", label: "Note", type: "textarea" }]}
     onSubmit={async v => {
       if (b) await db.update("batches", { id: b.id }, v); else await db.insert("batches", v);

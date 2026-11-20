@@ -21,7 +21,7 @@ export function OrderPath({ o, lines, shipment, customer }: { o: any; lines: any
   const at = steps.indexOf(o.status);
   const next = steps[at + 1];
   const base = orderPath(o); const cur = o.currency; const tol = 0.01;
-  const withoutPo = lines.filter(l => !l.purchase_order_id && Number(l.qty) > 0).length;
+  const withoutPo = lines.filter(l => !l.purchase_order_id && !l.own_stock && Number(l.qty) > 0).length;
   const hasDoc = (t: string) => docs.some(d => d.doc_type === t);
 
   // what each step asks for (shown for the next step)

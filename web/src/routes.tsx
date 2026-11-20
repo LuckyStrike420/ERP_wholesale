@@ -32,6 +32,8 @@ import { PaymentTermForm, PaymentTerms } from "@/modules/admin/PaymentTerms";
 import { AutomationForm, Automations } from "@/modules/admin/Automations";
 import { TaskForm, Tasks } from "@/modules/tasks/Tasks";
 import { DocSlotForm, DocSlots } from "@/modules/admin/DocSlots";
+import { PurchaseOrderReceive } from "@/modules/purchasing/POLines";
+import { AssembleForm, Assemblies } from "@/modules/stock/Assembly";
 
 export interface Route { path: string; section: string; page: ComponentType }
 const r = (path: string, section: string, page: ComponentType): Route => ({ path, section, page });
@@ -54,7 +56,7 @@ export const ROUTES: Route[] = [
   r("/purchasing", "purchasing", PurchaseOrders), r("/purchasing/new", "purchasing", PurchaseOrderNew),
   r("/purchasing/:po", "purchasing", PurchaseOrderDetail), r("/purchasing/:po/edit", "purchasing", PurchaseOrderEdit),
   r("/purchasing/:po/payment", "purchasing", PurchaseOrderPayment), r("/purchasing/:po/invoice", "purchasing", PurchaseOrderInvoice),
-  r("/purchasing/:po/write-off", "purchasing", PurchaseOrderWriteOff), r("/purchasing/:po/pdf", "purchasing", PurchaseOrderDocument),
+  r("/purchasing/:po/write-off", "purchasing", PurchaseOrderWriteOff), r("/purchasing/:po/pdf", "purchasing", PurchaseOrderDocument), r("/purchasing/:po/receive", "purchasing", PurchaseOrderReceive),
   r("/customers", "customers", Customers), r("/customers/new", "customers", CustomerForm), r("/customers/health", "customers", CustomersHealthPage),
   r("/customers/:slug", "customers", CustomerDetail), r("/customers/:slug/edit", "customers", CustomerForm),
   r("/customers/:slug/contacts/new", "customers", CustomerContactForm), r("/customers/:slug/contacts/:id", "customers", CustomerContactForm),
@@ -66,7 +68,7 @@ export const ROUTES: Route[] = [
   r("/shipping", "shipping", Shipping), r("/shipping/new", "shipping", ShipmentForm), r("/shipping/:ref/edit", "shipping", ShipmentForm),
   r("/stock", "stock", Stock), r("/stock/batches/new", "stock", BatchForm), r("/stock/batches/:batch", "stock", BatchDetail), r("/stock/batches/:batch/edit", "stock", BatchForm),
   r("/stock/items/new", "stock", BatchItemForm), r("/stock/items/:id", "stock", BatchItemForm), r("/stock/corrections/new", "stock", StockCorrection),
-  r("/stock/movements", "stock", StockMovements), r("/stock/counts", "stock", StockCounts), r("/stock/counts/:id", "stock", StockCountSheet), r("/stock/value", "stock", StockValue),
+  r("/stock/movements", "stock", StockMovements), r("/stock/counts", "stock", StockCounts), r("/stock/counts/:id", "stock", StockCountSheet), r("/stock/value", "stock", StockValue), r("/stock/assemblies", "stock", Assemblies), r("/stock/assemble", "stock", AssembleForm),
   r("/reports", "reports", () => <Reports tab="customers" />), r("/reports/suppliers", "reports", () => <Reports tab="suppliers" />),
   r("/reports/monthly", "reports", () => <Reports tab="monthly" />), r("/reports/products", "reports", () => <Reports tab="products" />),
   r("/reports/cash-flow", "reports", () => <Reports tab="cash-flow" />), r("/reports/custom", "reports", () => <Reports tab="custom" />), r("/reports/forecast", "reports", () => <Reports tab="forecast" />),

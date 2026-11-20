@@ -13,6 +13,7 @@ import { date, money, pct, qty, today } from "@/app/format";
 import { FavoriteStar, useRecord } from "@/app/Favorites";
 import { findSimilar } from "@/app/duplicates";
 import { similarWarning } from "@/modules/parties/Parties";
+import { RecipeSection } from "@/modules/stock/Assembly";
 
 const TYPES = ["EXW", "FOB"] as const;
 
@@ -55,6 +56,7 @@ export function ProductForm() {
   useRecord(rec);
   if (slug && !row) return loading ? <Loading /> : <NotFound what="Product" back={{ to: "/products", label: "All products" }} />;
   const fields: Field[] = [{ name: "name", label: "Product", required: true }, { name: "sku", label: "SKU", span: 1 }, { name: "kind", label: "Kind", type: "select", span: 1, options: kinds.map(k => ({ value: k.code, label: k.code })) },
+    { name: "unit", label: "Unit", type: "select", span: 1, required: true, options: [{ value: "pcs", label: "Pieces" }, { value: "ml", label: "Millilitre (ml)" }], hint: "How stock and recipes count it, e.g. cream in ml" },
     { name: "default_supplier_id", label: "Supplier", type: "select", options: suppliers.map(s => ({ value: s.id, label: s.name })) },
     { name: "sale_price_fob", label: "Standard sale price FOB ($)", type: "number", span: 1, section: "Standard sale price", hint: "Used on a new order when no price agreement applies" },
     { name: "sale_price_exw", label: "Standard sale price EXW (€)", type: "number", span: 1, section: "Standard sale price" },
@@ -73,7 +75,8 @@ export function ProductForm() {
     { name: "notes", label: "Note", type: "textarea", section: "Note" }];
   return <FormPage title={row ? <span className="flex items-center gap-2">{row.name}{rec && <FavoriteStar r={rec} />}</span> : "New product"} back={{ to: "/products", label: "Products" }} fields={fields}
     sub={row ? "A changed cost rule is saved as a new version from the chosen date; the old version stays. Orders with a supplier invoice or a completed status keep their final cost." : undefined}
-    initial={row ? { ...row, ...Object.fromEntries(TYPES.flatMap(t => { const x = row[t.toLowerCase()]; const k = t.toLowerCase(); return [[`${k}_basis`, x?.cost_basis], [`${k}_share`, x?.share_above_basis], [`${k}_royalty`, x?.royalty_per_unit]]; })) } : {}}
+    aside={row ? <RecipeSection product={row} /> : undefined}
+    initial={row ? { ...row, ...Object.fromEntries(TYPES.flatMap(t => { const x = row[t.toLowerCase()]; const k = t.toLowerCase(); return [[`${k}_basis`, x?.cost_basis], [`${k}_share`, x?.share_above_basis], [`${k}_royalty`, x?.royalty_per_unit]]; })) } : { unit: "pcs" }}
     onSubmit={async v => {
       const p: any = {}; const rs: any = {}; const validFrom: string = v.cost_valid_from || today();
       for (const [k, x] of Object.entries(v)) { if (k === "cost_valid_from") continue; (/^(fob|exw)_/.test(k) ? rs : p)[k] = x; }
