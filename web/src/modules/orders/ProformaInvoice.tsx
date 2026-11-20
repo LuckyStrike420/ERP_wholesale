@@ -12,7 +12,7 @@ import { useRows } from "@/app/store";
 import { Link, useParams } from "@/app/router";
 import { orderPath } from "@/app/paths";
 import { Loading, NotFound, Notice } from "@/app/ui";
-import { date, money, pct, qty, termWhen } from "@/app/format";
+import { ANCHOR_LABEL, date, money, pct, qty, termWhen } from "@/app/format";
 import { useOrder } from "./data";
 import { incotermText, weArrangeTransport } from "./incoterms";
 
@@ -126,10 +126,12 @@ function SalesDocument({ kind }: { kind: "pi" | "invoice" }) {
           {inv ? <>
             {Number(o.outstanding) > 0.01 ? <div>Please pay <b className="tabular-nums">{money(o.outstanding, cur)}</b>{o.balance_due_date ? ` by ${date(o.balance_due_date)}` : o.deposit_due_date && Number(o.deposit_outstanding) > 0.01 ? ` by ${date(o.deposit_due_date)}` : ""}.</div>
               : <div>Paid in full. Thank you.</div>}
+            {o.discount_open && <div className="mt-1">Or pay <b className="tabular-nums">{money(Number(o.outstanding) - Number(o.discount_amount), cur)}</b>{o.discount_until ? ` by ${date(o.discount_until)}` : ""} ({pct(o.discount_pct, Number(o.discount_pct) * 100 % 1 ? 1 : 0)} early payment discount).</div>}
             <div className="mt-1 text-gray-500">Please state invoice {o.invoice_number} with your payment.</div>
           </> : <>
             {Number(o.deposit_pct) > 0 && <div>{Number(o.deposit_pct) >= 1 ? "Payment" : `Deposit ${pct(o.deposit_pct, 0)}`}: <b className="tabular-nums">{money(o.deposit_due, cur)}</b>{o.deposit_due_date ? `, due ${date(o.deposit_due_date)}` : `, ${depositWhen}`}</div>}
             {Number(o.balance_due) > 0 && <div>Balance: <b className="tabular-nums">{money(o.balance_due, cur)}</b>{o.balance_due_date ? `, due ${date(o.balance_due_date)}` : `, ${balanceWhen}`}</div>}
+            {term && Number(term.discount_pct) > 0 && <div className="mt-1">{pct(term.discount_pct, Number(term.discount_pct) * 100 % 1 ? 1 : 0)} early payment discount ({money(o.discount_amount, cur)}) when paid {o.discount_until ? `by ${date(o.discount_until)}` : `within ${term.discount_days} days of ${ANCHOR_LABEL[(Number(term.deposit_pct) >= 1 ? term.deposit_anchor : term.balance_anchor) ?? ""] ?? "the due date"}`}.</div>}
             <div className="mt-1 text-gray-500">Please state PI {o.pi_number} with your payment.</div>
           </>}
         </div>

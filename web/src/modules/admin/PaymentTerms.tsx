@@ -8,7 +8,7 @@ import { useApp, useRows } from "@/app/store";
 import { useParams } from "@/app/router";
 import { byShort } from "@/app/paths";
 import { DataTable, FormPage, KV, LinkButton, Loading, NotFound, Pill, Section, type Field } from "@/app/ui";
-import { ANCHOR_OPTIONS, pct, termText, termWhen } from "@/app/format";
+import { ANCHOR_OPTIONS, discountText, pct, termText, termWhen } from "@/app/format";
 import { AdminHead } from "./Admin";
 
 export const termPath = (t: { id: string }) => `/admin/payment-terms/${String(t.id).slice(0, 8)}`;
@@ -38,6 +38,8 @@ const fields: Field[] = [
   { name: "deposit_anchor", label: "Counted from", type: "select", options: ANCHOR_OPTIONS, section: "Deposit due", hint: "Empty = no automatic date: set it per order" },
   { name: "balance_days", label: "Days", type: "number", span: 1, section: "Balance due" }, { name: "balance_when", label: "Before / after", type: "select", options: WHEN, span: 1, section: "Balance due" },
   { name: "balance_anchor", label: "Counted from", type: "select", options: ANCHOR_OPTIONS, section: "Balance due", hint: "Not used when the deposit is 100%. Empty = set it per order" },
+  { name: "discount_pct", label: "Discount %", type: "percent", span: 1, section: "Early payment discount", hint: "e.g. 3. Empty or 0 = no discount" },
+  { name: "discount_days", label: "If paid within (days)", type: "number", span: 1, section: "Early payment discount", hint: "Counted from the same date as the payment above, e.g. 14 days after the invoice date" },
   { name: "notes", label: "Note", type: "textarea", section: "Note" },
 ];
 
@@ -53,12 +55,15 @@ export function PaymentTermForm() {
   return <FormPage title={t ? `Edit ${t.name}` : "New payment term"} back={{ to: "/admin/payment-terms", label: "Payment terms" }} fields={fields} initial={initial}
     sub={t ? "A changed deposit % applies to new orders of the customers with this term; existing orders keep theirs. Changed days apply to every open order with this term." : undefined}
     aside={t && <Section title="Now"><KV items={[["Deposit", `${pct(t.deposit_pct, 0)} ${termWhen(t.deposit_anchor, t.deposit_days)}`],
-      ["Balance", Number(t.deposit_pct) >= 1 ? "–" : `${pct(1 - Number(t.deposit_pct), 0)} ${termWhen(t.balance_anchor, t.balance_days)}`]]} /></Section>}
+      ["Balance", Number(t.deposit_pct) >= 1 ? "–" : `${pct(1 - Number(t.deposit_pct), 0)} ${termWhen(t.balance_anchor, t.balance_days)}`],
+      ["Discount", Number(t.discount_pct) > 0 ? discountText(t).replace(/^ · /, "") : "–"]]} /></Section>}
     onSubmit={async v => {
       if (v.deposit_pct < 0 || v.deposit_pct > 1) throw new Error("Deposit % must be between 0 and 100");
+      if (Number(v.discount_pct) > 0 && v.discount_days == null) throw new Error("Within how many days must they pay for the discount?");
+      if (Number(v.discount_pct) >= 0.5) throw new Error("A discount of 50% or more is not an early payment discount");
       const signed = (d: any, w: any) => (Number(d ?? 0) || 0) * (w === "before" ? -1 : 1);
       const { deposit_when, balance_when, ...row } = v;
-      const body = { ...row, deposit_days: signed(v.deposit_days, deposit_when), balance_days: signed(v.balance_days, balance_when), active: !!v.active };
+      const body = { ...row, discount_pct: Number(v.discount_pct) || 0, discount_days: Number(v.discount_pct) > 0 ? v.discount_days : null, deposit_days: signed(v.deposit_days, deposit_when), balance_days: signed(v.balance_days, balance_when), active: !!v.active };
       if (t) await db.update("payment_terms", { id: t.id }, body); else await db.insert("payment_terms", body);
     }} />;
 }

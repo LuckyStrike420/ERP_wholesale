@@ -34,10 +34,11 @@ export const BUCKET_TONE: Record<string, string> = { overdue: "red", reminder: "
 export const dateShort = (v: any) => { if (!v) return "–"; const d = date(v); return String(v).slice(0, 4) === String(new Date().getFullYear()) ? d.replace(/ \d{4}$/, "") : d; };
 
 // ---------------- payment terms ----------------
-export const ANCHOR_LABEL: Record<string, string> = { order_date: "the order date", pi_date: "the PI date", po_date: "the customer's PO date", invoice_date: "the invoice date", etd: "ETD", eta: "ETA" };
+export const ANCHOR_LABEL: Record<string, string> = { order_date: "the order date", pi_date: "the PI date", po_date: "the customer's PO date", invoice_date: "the invoice date", etd: "ETD", eta: "ETA", delivery_date: "delivery" };
 export const ANCHOR_OPTIONS = [
   { value: "order_date", label: "Order date (PI date, else customer PO date)" }, { value: "pi_date", label: "PI date" }, { value: "po_date", label: "Customer PO date" },
-  { value: "invoice_date", label: "Invoice date" }, { value: "etd", label: "ETD (departure / pick-up)" }, { value: "eta", label: "ETA (arrival)" }];
+  { value: "invoice_date", label: "Invoice date" }, { value: "etd", label: "ETD (departure / pick-up)" }, { value: "eta", label: "ETA (arrival)" },
+  { value: "delivery_date", label: "Delivery (picked up or delivered, from the shipment)" }];
 /** "7 days after the order date", "10 days before ETA", "on ETD", "date set per order" */
 export const termWhen = (anchor: string | null, d: any) => {
   if (!anchor) return "date set per order"; const n = Number(d ?? 0);
@@ -46,10 +47,13 @@ export const termWhen = (anchor: string | null, d: any) => {
 /** one line that says what the term means */
 export const termText = (t: any) => {
   if (!t) return "–"; const d = Number(t.deposit_pct);
-  if (d >= 1) return `100% ${termWhen(t.deposit_anchor, t.deposit_days)}`;
-  if (d <= 0) return `100% ${termWhen(t.balance_anchor, t.balance_days)}`;
-  return `${pct(d, 0)} ${termWhen(t.deposit_anchor, t.deposit_days)} · ${pct(1 - d, 0)} ${termWhen(t.balance_anchor, t.balance_days)}`;
+  if (d >= 1) return `100% ${termWhen(t.deposit_anchor, t.deposit_days)}${discountText(t)}`;
+  if (d <= 0) return `100% ${termWhen(t.balance_anchor, t.balance_days)}${discountText(t)}`;
+  return `${pct(d, 0)} ${termWhen(t.deposit_anchor, t.deposit_days)} · ${pct(1 - d, 0)} ${termWhen(t.balance_anchor, t.balance_days)}${discountText(t)}`;
 };
+/** " · 3% discount if paid within 14 days" */
+export const discountText = (t: any) => Number(t?.discount_pct) > 0 && t?.discount_days != null
+  ? ` · ${pct(t.discount_pct, Number(t.discount_pct) * 100 % 1 ? 1 : 0)} discount if paid within ${t.discount_days} day${Number(t.discount_days) === 1 ? "" : "s"}` : "";
 
 // ---------------- tasks and documents ----------------
 export const TASK_STATE_LABEL: Record<string, string> = { overdue: "Overdue", today: "Today", upcoming: "Upcoming", no_date: "No date", done: "Done" };

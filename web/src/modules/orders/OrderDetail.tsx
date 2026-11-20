@@ -67,6 +67,8 @@ export default function OrderDetail() {
   const chase = Number(o.deposit_outstanding) > 0.01 ? { what: "deposit", due: o.deposit_due_date } : { what: "payment", due: o.balance_due_date ?? o.deposit_due_date };
   const poButton = !locked && withoutPo.length > 0 && <LinkButton size="sm" to={`${base}/purchase-order`}><ClipboardList />Create PO{withoutPo.length < lines.length ? ` (${withoutPo.length} line${withoutPo.length === 1 ? "" : "s"})` : ""}</LinkButton>;
 
+  const bookDiscount = () => run(() => db.rpc("book_early_discount", { p_order: o.id }), "Early payment discount booked");
+
   const blockList: Block[] = [
       { id: "schedule", title: "Payment schedule", size: "half", node: <Section title="Payment schedule" sub={term ? term.name : "No payment term on this order"}
         action={!locked && <Link to={`${base}/edit`} className="text-xs font-medium text-indigo-600 hover:underline">Change term or dates</Link>}>
@@ -77,6 +79,10 @@ export default function OrderDetail() {
             ["Balance due", term || o.balance_due_date ? dueText(o.balance_due_date, o.balance_due_date_set, term?.balance_anchor, term?.balance_days)
               : o.order_type === "FOB" ? <span className="text-gray-400">10 days before ETA (ETA unknown)</span> : <span className="text-gray-400">not set</span>] as [any, any]] : []),
           ...(o.order_type === "EXW" ? [["Reminder from", date(o.reminder_date)] as [any, any]] : []),
+          ...(Number(o.discount_pct) > 0 ? [[`Discount ${pct(o.discount_pct, Number(o.discount_pct) * 100 % 1 ? 1 : 0)}`, o.discount_to_book
+              ? <span>paid in time · <button type="button" className="font-medium text-indigo-600 hover:underline" onClick={bookDiscount}>book {money(o.outstanding, cur)}</button></span>
+              : o.discount_open ? <span>{money(Number(o.outstanding) - Number(o.discount_amount), cur)} if paid{o.discount_until ? ` by ${date(o.discount_until)}` : " within the term (date not known yet)"}</span>
+              : <span className="text-gray-400">{o.discount_until ? `ended ${date(o.discount_until)}` : "–"}</span>] as [any, any]] : []),
         ]} />
         {open && !["draft", "cancelled"].includes(o.status) && <div className="border-t border-gray-100 px-5 py-2.5">
           <Link to={newTaskPath({ order: o.pi_number ?? `draft-${o.id.slice(0, 8)}`, title: `Chase ${chase.what} ${o.pi_number ? `PI ${o.pi_number} ` : ""}(${o.customer_name})`, due: chase.due, back: base })}
@@ -173,6 +179,7 @@ export default function OrderDetail() {
       <ul className="space-y-1.5 text-sm text-amber-950">{mine.map((a, i) => <li key={i} className="flex items-center gap-2"><SeverityPill s={a.severity} />{a.message}
         {a.code === "stock_sale_without_po" && !locked && <Link to={`${base}/purchase-order`} className="ml-1 font-medium text-indigo-600 hover:underline">Create PO</Link>}
         {a.code === "transport_cost_missing" && <Link to={`/costs/new?order=${o.id}&kind=freight&back=${encodeURIComponent(base)}`} className="ml-1 font-medium text-indigo-600 hover:underline">Add transport cost</Link>}
+        {a.code === "early_discount_to_book" && <button type="button" onClick={bookDiscount} className="ml-1 font-medium text-indigo-600 hover:underline">Book discount</button>}
         {a.code === "document_missing" && <button type="button" onClick={() => setTab("documents")} className="ml-1 font-medium text-indigo-600 hover:underline">Upload</button>}</li>)}</ul></div>}
     </div>
 
